@@ -62,3 +62,5 @@ docs/_build/
 target/
 
 Thumbs.db
+.Rproj.user
+.DS_Store
