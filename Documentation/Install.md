@@ -1,9 +1,15 @@
-# Install Instructions for PiClock
-## For Raspbian Stretch
+# Introduction
+This fork is based on the original PiClock project by [n0bel](https://github.com/n0bel/PiClock), but has been updated to work with Raspberry Pi OS Bookworm 64-bit, Python 3, and QT5. The installation instructions have also been revised to reflect these changes.
 
-PiClock and this install guide are based on Raspian Stretch downloaded from
-https://downloads.raspberrypi.org/raspbian/images/raspbian-2019-04-09/ I suggest using
-"Raspbian Stretch with desktop"  It will work with many raspbian versions,
+## Known issues
+- Long startup time: The clock may take a while to start up, 10 minutes is something you should expect.
+- There some artifacts on rain radar animation.
+
+# Install Instructions for PiClock
+## For Raspbian Bookworm 64-bit
+
+PiClock and this install guide are based on Raspberry Pi OS (64-bit) downloaded from
+https://www.raspberrypi.com/software/operating-systems/#raspberry-pi-os-64-bit I suggest using "Raspberry Pi OS with desktop". It will work with many raspbian versions,
 but you may have to add more packages, etc.  That exercise is left for the reader.
 
 What follows is a step by step guide.  If you start with a new clean raspbian
@@ -117,9 +123,9 @@ update the repository
 ```
 apt-get update
 ```
-then get qt4 for python
+then get qt5 for python
 ```
-apt-get install python-qt4
+sudo apt install python3-pyqt5
 ```
 you may need to confirm some things, like:
 After this operation, 59.5 MB of additional disk space will be used.
@@ -140,9 +146,9 @@ Then try the pip command again.
 
 then install more needed python libraries
 ```
-pip install python-dateutil --upgrade
-pip install tzlocal --upgrade
-pip install python-metar --upgrade
+sudo apt install python3-dateutil
+sudo apt install python3-tzlocal
+sudo apt install python3-pymetar
 ```
 
 then get unclutter (disables the mouse pointer when there's no activity)
@@ -201,7 +207,7 @@ and this is where we want to be.  Note that the following command while
 itself not being case sensitive, further operation of PiClock may be
 affected if the upper and lower case of the command is not followed.
 ```
-git clone https://github.com/n0bel/PiClock.git
+git clone https://github.com/marioem/PiClock.git
 ```
 (Optional for GPIO keys)
 Once that is done, you'll have a new directory called PiClock
@@ -537,4 +543,8 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org tzloca
 pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org python-metar-1.4.0.tar.gz 
 
 ```
+# Revision Information
 
+| Revision       | Date           | Description       | 
+|------------|------------------|-------------------|
+| 3.0.0      | 2025-06-22       | Code adapted for Raspberry Pi OS Bookworm 64-bit, Python 3 and QT5. Updated install instructions. |
