@@ -55,6 +55,9 @@ class suntimes:
 
     @staticmethod
     def __timefromdecimalday(day):
+        if (day < 0.0):
+            xdt = datetime.datetime.now()
+            return datetime.time(hour=xdt.hour, minute=xdt.minute, second=xdt.second)
         hours = 24.0*day
         h = int(hours)
         minutes = (hours-h)*60
@@ -165,6 +168,11 @@ def tick():
             pass
 
     now = datetime.datetime.now()
+    try:
+        if Config.clockUTC:
+            now = datetime.datetime.utcnow()
+    except:
+        pass
     if Config.digital:
         timestr = Config.digitalformat.format(now)
         if Config.digitalformat.find("%I") > -1:
@@ -259,7 +267,7 @@ def tick():
         ds2 = "{0:%a %b} {0.day}<sup>{1}</sup> {0.year}".format(now, sup)
         datex.setText(ds)
         datex2.setText(ds2)
-        dt = now.replace(tzinfo=tzlocal.get_localzone())
+        dt = datetime.datetime.now(tz=tzlocal.get_localzone())
         sunrise = sun.sunrise(dt)
         sunset = sun.sunset(dt)
         bottomText = ""
@@ -313,6 +321,11 @@ def pressi(f):
 
 def heightm(f):
     return f * 25.4
+
+
+def heighti(f):
+    return f / 25.4
+
 
 
 def barom(f):
@@ -371,9 +384,100 @@ def gettemp():
     tempreply = manager.get(r)
     tempreply.finished.connect(tempfinished)
 
+def wxfinished_owm_current():
+    global wxreplyc, wxdata, supress_current
+    global wxicon, temper, wxdesc, press, humidity
+    global wind, wind2, wdate, bottom, forecast
+    global wxicon2, temper2, wxdesc2, attribution
+    global daytime
+    owmicons = {
+        '01d': 'clear-day',
+        '02d': 'partly-cloudy-day',
+        '03d': 'partly-cloudy-day',
+        '04d': 'partly-cloudy-day',
+        '09d': 'rain',
+        '10d': 'rain',
+        '11d': 'thunderstorm',
+        '13d': 'snow',
+        '50d': 'fog',
+        '01n': 'clear-night',
+        '02n': 'partly-cloudy-night',
+        '03n': 'partly-cloudy-night',
+        '04n': 'partly-cloudy-night',
+        '09n': 'rain',
+        '10n': 'rain',
+        '11n': 'thunderstorm',
+        '13n': 'snow',
+        '50n': 'fog'
+    }
+    attribution.setText("openweathermap.org")
+    attribution2.setText("openweathermap.org")    
+    wxstr = str(wxreplyc.readAll())
+    #print('owm current', wxstr)
+    wxdata = json.loads(wxstr)
+    if not supress_current:
+        f = wxdata
+        icon = f['weather'][0]['icon']
+        icon = owmicons[icon]
+        wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + icon + ".png")
+        wxicon.setPixmap(wxiconpixmap.scaled(
+            wxicon.width(), wxicon.height(), Qt.IgnoreAspectRatio,
+            Qt.SmoothTransformation))
+        wxicon2.setPixmap(wxiconpixmap.scaled(
+            wxicon.width(),
+            wxicon.height(),
+            Qt.IgnoreAspectRatio,
+            Qt.SmoothTransformation))
+        wxdesc.setText(f['weather'][0]['description'].title())
+        wxdesc2.setText(f['weather'][0]['description'].title())
 
-def wxfinished_owm():
-    global wxreply, wxdata, supress_current
+        if Config.metric:
+            temper.setText('%.1f' % (tempm(f['main']['temp'])) + u'°C')
+            temper2.setText('%.1f' % (tempm(f['main']['temp'])) + u'°C')
+            press.setText(Config.LPressure + '%.1f' % f['main']['pressure'] + 'mb')
+            humidity.setText(Config.LHumidity + '%.0f%%' % (f['main']['humidity']))
+            wd = bearing(f['wind']['deg'])
+            if Config.wind_degrees:
+                wd = str(f['wind']['deg']) + u'°'
+            w = (Config.LWind +
+                 wd + ' ' +
+                 '%.1f' % (speedm(f['wind']['speed'])) + 'kmh')
+            if 'gust' in f['wind']:
+                w += (Config.Lgusting +
+                      '%.1f' % (speedm(f['wind']['gust'])) + 'kmh')
+            wind.setText(w)
+            wind2.setText(Config.LFeelslike +
+                          '%.1f' % (tempm(f['main']['feels_like'])) + u'°C')
+            wdate.setText("{0:%H:%M}".format(datetime.datetime.fromtimestamp(
+                int(f['dt']))))
+    # Config.LPrecip1hr + f['precip_1hr_metric'] + 'mm ' +
+    # Config.LToday + f['precip_today_metric'] + 'mm')
+        else:
+            temper.setText('%.1f' % (f['main']['temp']) + u'°F')
+            temper2.setText('%.1f' % (f['main']['temp']) + u'°F')
+            press.setText(
+                Config.LPressure + '%.2f' % pressi(f['main']['pressure']) + 'in')
+            humidity.setText(Config.LHumidity + '%.0f%%' % (f['main']['humidity']))
+            wd = bearing(f['wind']['deg'])
+            if Config.wind_degrees:
+                wd = str(f['wind']['deg']) + u'°'
+            w = (Config.LWind +
+                 wd + ' ' +
+                 '%.1f' % ((f['wind']['speed'])) + 'mph')
+            if 'gust' in f['wind']:
+                w += (Config.Lgusting +
+                      '%.1f' % ((f['wind']['gust'])) + 'mph')
+            wind.setText(w)
+            wind2.setText(Config.LFeelslike +
+                          '%.1f' % (f['main']['feels_like']) + u'°F')
+            wdate.setText("{0:%H:%M}".format(datetime.datetime.fromtimestamp(
+                int(f['dt']))))
+    # Config.LPrecip1hr + f['precip_1hr_in'] + 'in ' +
+    # Config.LToday + f['precip_today_in'] + 'in')
+
+    
+def wxfinished_owm_forecast():
+    global wxreplyf, wxdata, supress_current
     global wxicon, temper, wxdesc, press, humidity
     global wind, wind2, wdate, bottom, forecast
     global wxicon2, temper2, wxdesc2, attribution
@@ -401,7 +505,191 @@ def wxfinished_owm():
     attribution.setText("openweathermap.org")
     attribution2.setText("openweathermap.org")
 
+    wxstr = str(wxreplyf.readAll())
+    #print('owm forecast', wxstr)
+    wxdata = json.loads(wxstr)
+
+    for i in range(0, 3):
+        f = wxdata['list'][i]
+        fl = forecast[i]
+        wicon = f['weather'][0]['icon']
+        wicon = owmicons[wicon]
+        icon = fl.findChild(QtGui.QLabel, "icon")
+        wxiconpixmap = QtGui.QPixmap(
+            Config.icons + "/" + wicon + ".png")
+        icon.setPixmap(wxiconpixmap.scaled(
+            icon.width(),
+            icon.height(),
+            Qt.IgnoreAspectRatio,
+            Qt.SmoothTransformation))
+        wx = fl.findChild(QtGui.QLabel, "wx")
+        day = fl.findChild(QtGui.QLabel, "day")
+        day.setText("{0:%A %I:%M%p}".format(datetime.datetime.fromtimestamp(
+            int(f['dt']))))
+        f2 = f['main']
+        s = ''
+        pop = 0
+        ptype = ''
+        paccum = 0
+        if ('pop' in f):
+            pop = float(f['pop']) * 100.0
+        if ('snow' in f):
+            ptype = 'snow'
+            paccum = float(f['snow']['3h'])
+        if ('rain' in f):
+            ptype = 'rain'
+            paccum = float(f['rain']['3h'])
+
+        if (pop >= 0.1):
+            s += '%.0f' % pop + '% '
+        if Config.metric:
+            if (ptype == 'snow'):
+                if (paccum > 0.5):
+                    s += Config.LSnow + '%.0f' % paccum + 'mm '
+            else:
+                if (paccum > 0.5):
+                    s += Config.LRain + '%.0f' % paccum + 'mm '
+            s += '%.0f' % tempm(f2['temp']) + u'°C'
+        else:
+            if (ptype == 'snow'):
+                if (paccum > 2.54):
+                    s += Config.LSnow + '%.1f' % heighti(paccum) + 'in '
+            else:
+                if (paccum > 2.54):
+                    s += Config.LRain + '%.1f' % heighti(paccum) + 'in '
+            s += '%.0f' % (f2['temp']) + u'°F'
+
+        wx.setStyleSheet(
+            "#wx { font-size: " +
+            str(int(22 * xscale * Config.fontmult)) + "px; }")
+        wx.setText(f['weather'][0]['description'].title() + "\n" + s)
+
+    # find 6am in the current timezone (weather day is 6am to 6am next day)
+    dx = datetime.datetime.now()
+    dx6am = datetime.datetime(dx.year, dx.month, dx.day, 6, 0, 0)
+    dx6amnext = dx6am + datetime.timedelta(0,86399)
+    for i in range(3, 9): # target forecast box
+        s = ''
+        fl = forecast[i]
+        wx = fl.findChild(QtGui.QLabel, "wx")
+        day = fl.findChild(QtGui.QLabel, "day")
+        icon = fl.findChild(QtGui.QLabel, "icon")
+        setday = True
+        xpop = 0.0  # max
+        rpaccum = 0.0; # total rain
+        spaccum = 0.0; # total snow
+        xmintemp = 9999 # min
+        xmaxtemp = -9999 #max   
+        ldesc = []
+        licon = []
+        for f in wxdata['list']:
+            dt = datetime.datetime.fromtimestamp(int(f['dt']))
+            if dt >= dx6am and dt <= dx6amnext:
+                if setday:
+                    setday = False
+                    day.setText("{0:%A}".format(dt))
+                pop = 0.0
+                paccum = 0.0
+                if ('pop' in f):
+                    pop = float(f['pop']) * 100.0
+                if ('rain' in f):
+                    ptype = 'rain'
+                    paccum = float(f['rain']['3h'])
+                    rpaccum += paccum
+                if ('snow' in f):
+                    ptype = 'snow'
+                    paccum = float(f['snow']['3h'])
+                    spaccum += paccum
+                if pop > xpop:
+                    xpop = pop
+                tx = float(f['main']['temp'])
+                if tx > xmaxtemp:
+                    xmaxtemp = tx
+                if tx < xmintemp:
+                    xmintemp = tx
+                ldesc.append(f['weather'][0]['description'])
+                licon.append(f['weather'][0]['icon'])
+        wicon = getmost(licon)
+        wdesc = getmost(ldesc)
+
+        if (xpop > 0.1):
+            s += '%.0f' % xpop + '% '
+
+        if Config.metric:
+            if (spaccum > 0.5):
+                s += Config.LSnow + '%.0f' % spaccum + 'mm '
+            if (rpaccum > 0.5):
+                s += Config.LRain + '%.0f' % rpaccum + 'mm '
+            s += '%.0f' % tempm(xmaxtemp) + '/' + \
+                 '%.0f' % tempm(xmintemp)
+        else:
+            if (spaccum > 2.54):
+                s += Config.LSnow + '%.1f' % heighti(spaccum) + 'in '
+            if (rpaccum > 2.54):
+                s += Config.LRain + '%.1f' % heighti(rpaccum) + 'in '
+            s += '%.0f' % xmaxtemp + '/' + \
+                 '%.0f' % xmintemp
+        wx.setStyleSheet(
+            "#wx { font-size: " +
+            str(int(19 * xscale * Config.fontmult)) + "px; }")
+        wx.setText(f['weather'][0]['description'].title() + "\n" + s)
+
+        wicon = owmicons[wicon]
+        wxiconpixmap = QtGui.QPixmap(
+            Config.icons + "/" + wicon + ".png")
+        icon.setPixmap(wxiconpixmap.scaled(
+            icon.width(),
+            icon.height(),
+            Qt.IgnoreAspectRatio,
+            Qt.SmoothTransformation))
+
+        
+        dx6am += datetime.timedelta(1)
+        dx6amnext += datetime.timedelta(1)
+    
+    #QtGui.QApplication.exit(0)
+
+def getmost(a):
+    b = dict((i, a.count(i)) for i in a)  # list to key and counts
+    print('getmost', b)
+    c = sorted(b, key=b.get)  # sort by counts
+    return c[-1]  # get last (most counted) item
+
+def wxfinished_owm():
+    global wxreply, wxdata, supress_current
+    global wxicon, temper, wxdesc, press, humidity
+    global wind, wind2, wdate, bottom, forecast
+    global wxicon2, temper2, wxdesc2, attribution
+    global daytime, owmonecall
+    owmicons = {
+        '01d': 'clear-day',
+        '02d': 'partly-cloudy-day',
+        '03d': 'partly-cloudy-day',
+        '04d': 'partly-cloudy-day',
+        '09d': 'rain',
+        '10d': 'rain',
+        '11d': 'thunderstorm',
+        '13d': 'snow',
+        '50d': 'fog',
+        '01n': 'clear-night',
+        '02n': 'partly-cloudy-night',
+        '03n': 'partly-cloudy-night',
+        '04n': 'partly-cloudy-night',
+        '09n': 'rain',
+        '10n': 'rain',
+        '11n': 'thunderstorm',
+        '13n': 'snow',
+        '50n': 'fog'
+    }
+    attribution.setText("openweathermap.org")
+    attribution2.setText("openweathermap.org")
+
     wxstr = str(wxreply.readAll())
+    if 'Invalid API' in wxstr:
+        print("OWM one call failed, switching to weather and forecast")
+        owmonecall = False
+        getwx_owm()
+        return
     wxdata = json.loads(wxstr)
     f = wxdata['current']
     icon = f['weather'][0]['icon']
@@ -416,8 +704,8 @@ def wxfinished_owm():
             wxicon.height(),
             Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation))
-        wxdesc.setText(f['weather'][0]['description'])
-        wxdesc2.setText(f['weather'][0]['description'])
+        wxdesc.setText(f['weather'][0]['description'].title())
+        wxdesc2.setText(f['weather'][0]['description'].title())
 
         if Config.metric:
             temper.setText('%.1f' % (tempm(f['temp'])) + u'°C')
@@ -497,25 +785,25 @@ def wxfinished_owm():
             s += '%.0f' % pop + '% '
         if Config.metric:
             if (ptype == 'snow'):
-                if (paccum > 0.05):
-                    s += Config.LSnow + '%.0f' % heightm(paccum) + 'mm '
+                if (paccum > 0.5):
+                    s += Config.LSnow + '%.0f' % paccum + 'mm '
             else:
-                if (paccum > 0.05):
-                    s += Config.LRain + '%.0f' % heightm(paccum) + 'mm '
+                if (paccum > 0.5):
+                    s += Config.LRain + '%.0f' % paccum + 'mm '
             s += '%.0f' % tempm(f['temp']) + u'°C'
         else:
             if (ptype == 'snow'):
-                if (paccum > 0.05):
-                    s += Config.LSnow + '%.0f' % paccum + 'in '
+                if (paccum > 2.54):
+                    s += Config.LSnow + '%.1f' % heighti(paccum) + 'in '
             else:
-                if (paccum > 0.05):
-                    s += Config.LRain + '%.0f' % paccum + 'in '
+                if (paccum > 2.54):
+                    s += Config.LRain + '%.1f' % heighti(paccum) + 'in '
             s += '%.0f' % (f['temp']) + u'°F'
 
         wx.setStyleSheet(
             "#wx { font-size: " +
-            str(int(25 * xscale * Config.fontmult)) + "px; }")
-        wx.setText(f['weather'][0]['description'] + "\n" + s)
+            str(int(22 * xscale * Config.fontmult)) + "px; }")
+        wx.setText(f['weather'][0]['description'].title() + "\n" + s)
 
     for i in range(3, 9):
         f = wxdata['daily'][i - 3]
@@ -551,268 +839,115 @@ def wxfinished_owm():
         if Config.metric:
             if (ptype == 'snow'):
                 if (paccum > 0.05):
-                    s += Config.LSnow + '%.0f' % heightm(paccum) + 'mm '
+                    s += Config.LSnow + '%.0f' % paccum + 'mm '
             else:
                 if (paccum > 0.05):
-                    s += Config.LRain + '%.0f' % heightm(paccum) + 'mm '
+                    s += Config.LRain + '%.0f' % paccum + 'mm '
             s += '%.0f' % tempm(f['temp']['max']) + '/' + \
                  '%.0f' % tempm(f['temp']['min'])
         else:
             if (ptype == 'snow'):
-                if (paccum > 0.05):
-                    s += Config.LSnow + '%.1f' % paccum + 'in '
+                if (paccum > 2.54):
+                    s += Config.LSnow + '%.1f' % heighti(paccum) + 'in '
             else:
-                if (paccum > 0.05):
-                    s += Config.LRain + '%.1f' % paccum + 'in '
+                if (paccum > 2.54):
+                    s += Config.LRain + '%.1f' % heighti(paccum) + 'in '
             s += '%.0f' % f['temp']['max'] + '/' + \
                  '%.0f' % f['temp']['min']
 
         wx.setStyleSheet(
             "#wx { font-size: "
             + str(int(19 * xscale * Config.fontmult)) + "px; }")
-        wx.setText(f['weather'][0]['description'] + "\n" + s)
+        wx.setText(f['weather'][0]['description'].title() + "\n" + s)
 
+tm_code_map = {
+    0: 'Unknown',
+    1000: 'Clear',
+    1100: 'Mostly Clear',
+    1101: 'Partly Cloudy',
+    1102: 'Mostly Cloudy',
+    1001: 'Cloudy',
+    2000: 'Fog',
+    2100: 'Light Fog',
+    4000: 'Drizzle',
+    4001: 'Rain',
+    4200: 'Light Rain',
+    4201: 'Heavy Rain',
+    5000: 'Snow',
+    5001: 'Flurries',
+    5100: 'Light Snow',
+    5101: 'Heavy Snow',
+    6000: 'Freezing Drizzle',
+    6001: 'Freezing Rain',
+    6200: 'Light Freezing Rain',
+    6201: 'Heavy Freezing Rain',
+    7000: 'Ice Pellets',
+    7101: 'Heavy Ice Pellets',
+    7102: 'Light Ice Pellets',
+    8000: 'Thunderstorm'
+}
 
-def wxfinished_ds():
-    global wxreply, wxdata, supress_current
-    global wxicon, temper, wxdesc, press, humidity
-    global wind, wind2, wdate, bottom, forecast
-    global wxicon2, temper2, wxdesc2, attribution
-    global daytime
-
-    attribution.setText("DarkSky.net")
-    attribution2.setText("DarkSky.net")
-
-    wxstr = str(wxreply.readAll())
-    wxdata = json.loads(wxstr)
-    f = wxdata['currently']
-    if not supress_current:
-        wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + f['icon'] + ".png")
-        wxicon.setPixmap(wxiconpixmap.scaled(
-            wxicon.width(), wxicon.height(), Qt.IgnoreAspectRatio,
-            Qt.SmoothTransformation))
-        wxicon2.setPixmap(wxiconpixmap.scaled(
-            wxicon.width(),
-            wxicon.height(),
-            Qt.IgnoreAspectRatio,
-            Qt.SmoothTransformation))
-        wxdesc.setText(f['summary'])
-        wxdesc2.setText(f['summary'])
-
-        if Config.metric:
-            temper.setText('%.1f' % (tempm(f['temperature'])) + u'°C')
-            temper2.setText('%.1f' % (tempm(f['temperature'])) + u'°C')
-            press.setText(Config.LPressure + '%.1f' % f['pressure'] + 'mb')
-            humidity.setText(
-                Config.LHumidity + '%.0f%%' % (f['humidity']*100.0))
-            wd = bearing(f['windBearing'])
-            if Config.wind_degrees:
-                wd = str(f['windBearing']) + u'°'
-            wind.setText(Config.LWind +
-                         wd + ' ' +
-                         '%.1f' % (speedm(f['windSpeed'])) + 'kmh' +
-                         Config.Lgusting +
-                         '%.1f' % (speedm(f['windGust'])) + 'kmh')
-            wind2.setText(Config.LFeelslike +
-                          '%.1f' % (tempm(f['apparentTemperature'])) + u'°C')
-            wdate.setText("{0:%H:%M}".format(datetime.datetime.fromtimestamp(
-                int(f['time']))))
-    # Config.LPrecip1hr + f['precip_1hr_metric'] + 'mm ' +
-    # Config.LToday + f['precip_today_metric'] + 'mm')
-        else:
-            temper.setText('%.1f' % (f['temperature']) + u'°F')
-            temper2.setText('%.1f' % (f['temperature']) + u'°F')
-            press.setText(
-                Config.LPressure + '%.2f' % pressi(f['pressure']) + 'in')
-            humidity.setText(
-                Config.LHumidity + '%.0f%%' % (f['humidity']*100.0))
-            wd = bearing(f['windBearing'])
-            if Config.wind_degrees:
-                wd = str(f['windBearing']) + u'°'
-            wind.setText(Config.LWind +
-                         wd + ' ' +
-                         '%.1f' % (f['windSpeed']) + 'mph' +
-                         Config.Lgusting +
-                         '%.1f' % (f['windGust']) + 'mph')
-            wind2.setText(Config.LFeelslike +
-                          '%.1f' % (f['apparentTemperature']) + u'°F')
-            wdate.setText("{0:%H:%M}".format(datetime.datetime.fromtimestamp(
-                int(f['time']))))
-    # Config.LPrecip1hr + f['precip_1hr_in'] + 'in ' +
-    # Config.LToday + f['precip_today_in'] + 'in')
-
-    for i in range(0, 3):
-        f = wxdata['hourly']['data'][i * 3 + 2]
-        fl = forecast[i]
-        icon = fl.findChild(QtGui.QLabel, "icon")
-        wxiconpixmap = QtGui.QPixmap(
-            Config.icons + "/" + f['icon'] + ".png")
-        icon.setPixmap(wxiconpixmap.scaled(
-            icon.width(),
-            icon.height(),
-            Qt.IgnoreAspectRatio,
-            Qt.SmoothTransformation))
-        wx = fl.findChild(QtGui.QLabel, "wx")
-        day = fl.findChild(QtGui.QLabel, "day")
-        day.setText("{0:%A %I:%M%p}".format(datetime.datetime.fromtimestamp(
-            int(f['time']))))
-        s = ''
-        pop = 0
-        ptype = ''
-        paccum = 0
-        if ('precipProbability' in f):
-            pop = float(f['precipProbability']) * 100.0
-        if ('precipAccumulation' in f):
-            paccum = float(f['precipAccumulation'])
-        if ('precipType' in f):
-            ptype = f['precipType']
-
-        if (pop > 0.0 or ptype != ''):
-            s += '%.0f' % pop + '% '
-        if Config.metric:
-            if (ptype == 'snow'):
-                if (paccum > 0.05):
-                    s += Config.LSnow + '%.0f' % heightm(paccum) + 'mm '
-            else:
-                if (paccum > 0.05):
-                    s += Config.LRain + '%.0f' % heightm(paccum) + 'mm '
-            s += '%.0f' % tempm(f['temperature']) + u'°C'
-        else:
-            if (ptype == 'snow'):
-                if (paccum > 0.05):
-                    s += Config.LSnow + '%.0f' % paccum + 'in '
-            else:
-                if (paccum > 0.05):
-                    s += Config.LRain + '%.0f' % paccum + 'in '
-            s += '%.0f' % (f['temperature']) + u'°F'
-
-        wx.setStyleSheet("#wx { font-size: " + str(int(25 * xscale)) + "px; }")
-        wx.setText(f['summary'] + "\n" + s)
-
-    for i in range(3, 9):
-        f = wxdata['daily']['data'][i - 3]
-        fl = forecast[i]
-        icon = fl.findChild(QtGui.QLabel, "icon")
-        wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + f['icon'] + ".png")
-        icon.setPixmap(wxiconpixmap.scaled(
-            icon.width(),
-            icon.height(),
-            Qt.IgnoreAspectRatio,
-            Qt.SmoothTransformation))
-        wx = fl.findChild(QtGui.QLabel, "wx")
-        day = fl.findChild(QtGui.QLabel, "day")
-        day.setText("{0:%A}".format(datetime.datetime.fromtimestamp(
-            int(f['time']))))
-        s = ''
-        pop = 0
-        ptype = ''
-        paccum = 0
-        if ('precipProbability' in f):
-            pop = float(f['precipProbability']) * 100.0
-        if ('precipAccumulation' in f):
-            paccum = float(f['precipAccumulation'])
-        if ('precipType' in f):
-            ptype = f['precipType']
-
-        if (pop > 0.05 or ptype != ''):
-            s += '%.0f' % pop + '% '
-        if Config.metric:
-            if (ptype == 'snow'):
-                if (paccum > 0.05):
-                    s += Config.LSnow + '%.0f' % heightm(paccum) + 'mm '
-            else:
-                if (paccum > 0.05):
-                    s += Config.LRain + '%.0f' % heightm(paccum) + 'mm '
-            s += '%.0f' % tempm(f['temperatureHigh']) + '/' + \
-                 '%.0f' % tempm(f['temperatureLow'])
-        else:
-            if (ptype == 'snow'):
-                if (paccum > 0.05):
-                    s += Config.LSnow + '%.1f' % paccum + 'in '
-            else:
-                if (paccum > 0.05):
-                    s += Config.LRain + '%.1f' % paccum + 'in '
-            s += '%.0f' % f['temperatureHigh'] + '/' + \
-                 '%.0f' % f['temperatureLow']
-
-        wx.setStyleSheet("#wx { font-size: " + str(int(19 * xscale)) + "px; }")
-        wx.setText(f['summary'] + "\n" + s)
-
-
-cc_code_map = {
-            "freezing_rain_heavy": "Freezing Rain",
-            "freezing_rain": "Freezing Rain",
-            "freezing_rain_light": "Freezing Rain",
-            "freezing_drizzle": "Freezing Drizzle",
-            "ice_pellets_heavy": "Ice Pellets",
-            "ice_pellets": "Ice Pellets",
-            "ice_pellets_light": "Ice Pellets",
-            "snow_heavy": "Heavy Snow",
-            "snow": "Snow",
-            "snow_light": "Light Snow",
-            "flurries": "Flurries",
-            "tstorm": "Thunder Storm",
-            "rain_heavy": "Heavy Rain",
-            "rain": "Rain",
-            "rain_light": "Light Rain",
-            "drizzle": "Drizzle",
-            "fog_light": "Light Fog",
-            "fog": "Fog",
-            "cloudy": "Cloudy",
-            "mostly_cloudy": "Mostly Cloudy",
-            "partly_cloudy": "Partly Cloudy",
-            "mostly_clear": "Mostly Clear",
-            "clear": "Clear"
+tm_code_icons = {
+    0: 'Unknown',
+    1000: 'clear-day',
+    1100: 'partly-cloudy-day',
+    1101: 'partly-cloudy-day',
+    1102: 'partly-cloudy-day',
+    1001: 'cloudy',
+    2000: 'fog',
+    2100: 'fog',
+    4000: 'sleet',
+    4001: 'rain',
+    4200: 'rain',
+    4201: 'rain',
+    5000: 'snow',
+    5001: 'snow',
+    5100: 'snow',
+    5101: 'snow',
+    6000: 'sleet',
+    6001: 'sleet',
+    6200: 'sleet',
+    6201: 'sleet',
+    7000: 'sleet',
+    7101: 'sleet',
+    7102: 'sleet',
+    8000: 'thunderstorm'
 }
 
 
-cc_code_icons = {
-            "freezing_rain_heavy": "sleet",
-            "freezing_rain": "sleet",
-            "freezing_rain_light": "sleet",
-            "freezing_drizzle": "sleet",
-            "ice_pellets_heavy": "sleet",
-            "ice_pellets": "sleet",
-            "ice_pellets_light": "sleet",
-            "snow_heavy": "snow",
-            "snow": "snow",
-            "snow_light": "snow",
-            "flurries": "snow",
-            "tstorm": "thunderstorm",
-            "rain_heavy": "rain",
-            "rain": "rain",
-            "rain_light": "rain",
-            "drizzle": "rain",
-            "fog_light": "fog",
-            "fog": "fog",
-            "cloudy": "cloudy",
-            "partly_cloudy": "partly-cloudy-day",
-            "mostly_cloudy": "partly-cloudy-day",
-            "mostly_clear": "partly-cloudy-day",
-            "clear": "clear-day"
-}
-
-
-def wxfinished_cc():
+def wxfinished_tm():
     global wxreply, wxdata, supress_current
     global wxicon, temper, wxdesc, press, humidity
-    global wind, wind2, wdate, bottom, forecast
+    global wind, feelslike, wdate, bottom, forecast
     global wxicon2, temper2, wxdesc2, attribution
     global daytime
-    attribution.setText("climacell.co")
-    attribution2.setText("climacell.co")
+
+    attribution.setText('Tomorrow.io')
+    attribution2.setText('Tomorrow.io')
 
     wxstr = str(wxreply.readAll())
-    wxdata = json.loads(wxstr)
-    f = wxdata
-    dt = dateutil.parser.parse(f['observation_time']['value'])\
+
+    try:
+        wxdata = json.loads(wxstr)
+    except ValueError:  # includes json.decoder.JSONDecodeError
+        print(traceback.format_exc())
+        print('Response from api.tomorrow.io: ' + wxstr)
+        return  # ignore and try again on the next refresh
+
+    if 'message' in wxdata:
+        print('ERROR code ' + str(wxdata['code']) + ' from api.tomorrow.io: ' + wxdata['type'] + ' - ' +
+              wxdata['message'])
+        return
+
+    f = wxdata['data']['timelines'][0]['intervals'][0]
+    dt = dateutil.parser.parse(f['startTime']) \
         .astimezone(tzlocal.get_localzone())
-    icon = f['weather_code']['value']
-    icon = cc_code_icons[icon]
+    icon = f['values']['weatherCode']
+    icon = tm_code_icons[icon]
     if not daytime:
         icon = icon.replace('-day', '-night')
     if not supress_current:
-        wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + icon + ".png")
+        wxiconpixmap = QtGui.QPixmap(Config.icons + '/' + icon + '.png')
         wxicon.setPixmap(wxiconpixmap.scaled(
             wxicon.width(), wxicon.height(), Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation))
@@ -821,205 +956,218 @@ def wxfinished_cc():
             wxicon.height(),
             Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation))
-        wxdesc.setText(cc_code_map[f['weather_code']['value']])
-        wxdesc2.setText(cc_code_map[f['weather_code']['value']])
+        wxdesc.setText(tm_code_map[f['values']['weatherCode']])
+        wxdesc2.setText(tm_code_map[f['values']['weatherCode']])
+
+        if Config.wind_degrees:
+            wd = str(f['values']['windDirection']) + u'°'
+        else:
+            wd = bearing(f['values']['windDirection'])
 
         if Config.metric:
-            temper.setText('%.1f' % (tempm(f['temp']['value'])) + u'°C')
-            temper2.setText('%.1f' % (tempm(f['temp']['value'])) + u'°C')
-            press.setText(
-                Config.LPressure +
-                '%.1f' % barom(f['baro_pressure']['value']) + 'mm')
-            humidity.setText(
-                Config.LHumidity + '%.0f%%' % (f['humidity']['value']))
-            wd = bearing(f['wind_direction']['value'])
-            if Config.wind_degrees:
-                wd = str(f['wind_direction']['value']) + u'°'
-            wind.setText(Config.LWind +
-                         wd + ' ' +
-                         '%.1f' % (speedm(f['wind_speed']['value'])) + 'kmh' +
+            temper.setText('%.1f' % (tempm(f['values']['temperature'])) + u'°C')
+            temper2.setText('%.1f' % (tempm(f['values']['temperature'])) + u'°C')
+            press.setText(Config.LPressure + '%.1f' % barom(f['values']['pressureSurfaceLevel']) + 'mm')
+            wind.setText(Config.LWind + wd + ' ' +
+                         '%.1f' % (speedm(f['values']['windSpeed'])) + 'km/h' +
                          Config.Lgusting +
-                         '%.1f' % (speedm(f['wind_gust']['value'])) + 'kmh')
+                         '%.1f' % (speedm(f['values']['windGust'])) + 'km/h')
             wind2.setText(Config.LFeelslike +
-                          '%.1f' % (tempm(f['feels_like']['value'])) + u'°C')
-            wdate.setText("{0:%H:%M}".format(dt))
-    # Config.LPrecip1hr + f['precip_1hr_metric'] + 'mm ' +
-    # Config.LToday + f['precip_today_metric'] + 'mm')
+                              '%.1f' % (tempm(f['values']['temperatureApparent'])) + u'°C')
         else:
-            temper.setText('%.1f' % (f['temp']['value']) + u'°F')
-            temper2.setText('%.1f' % (f['temp']['value']) + u'°F')
-            press.setText(
-                Config.LPressure +
-                '%.2f' % (f['baro_pressure']['value']) + 'in')
-            humidity.setText(
-                Config.LHumidity + '%.0f%%' % (f['humidity']['value']))
-            wd = bearing(f['wind_direction']['value'])
-            if Config.wind_degrees:
-                wd = str(f['wind_direction']['value']) + u'°'
+            temper.setText('%.1f' % (f['values']['temperature']) + u'°F')
+            temper2.setText('%.1f' % (f['values']['temperature']) + u'°F')
+            press.setText(Config.LPressure + '%.2f' % (f['values']['pressureSurfaceLevel']) + 'in')
             wind.setText(Config.LWind +
                          wd + ' ' +
-                         '%.1f' % (f['wind_speed']['value']) + 'mph' +
+                         '%.1f' % (f['values']['windSpeed']) + 'mph' +
                          Config.Lgusting +
-                         '%.1f' % (f['wind_gust']['value']) + 'mph')
+                         '%.1f' % (f['values']['windGust']) + 'mph')
             wind2.setText(Config.LFeelslike +
-                          '%.1f' % (f['feels_like']['value']) + u'°F')
-            wdate.setText("{0:%H:%M}".format(dt))
-    # Config.LPrecip1hr + f['precip_1hr_in'] + 'in ' +
-    # Config.LToday + f['precip_today_in'] + 'in')
+                              '%.1f' % (f['values']['temperatureApparent']) + u'°F')
+
+        humidity.setText(Config.LHumidity + '%.0f%%' % (f['values']['humidity']))
+        wdate.setText('{0:%H:%M}'.format(dt))
 
 
-def wxfinished_cc2():
-    global wxreply, forecast
+
+def wxfinished_tm2():
+    global wxreply2, wxdata2, forecast
     global daytime
+
     wxstr2 = str(wxreply2.readAll())
-    # print('cc2', wxstr2)
-    wxdata2 = json.loads(wxstr2)
+
+    try:
+        wxdata2 = json.loads(wxstr2)
+    except ValueError:  # includes json.decoder.JSONDecodeError
+        print(traceback.format_exc())
+        print('Response from api.tomorrow.io: ' + wxstr2)
+        return  # ignore and try again on the next refresh
+
+    if 'message' in wxdata2:
+        print('ERROR code ' + str(wxdata2['code']) + ' from api.tomorrow.io: ' + wxdata2['type'] + ' - ' +
+              wxdata2['message'])
+        return
 
     for i in range(0, 3):
-        f = wxdata2[i * 3 + 2]
-        # print(i, i*3+2, f)
+        f = wxdata2['data']['timelines'][0]['intervals'][i * 3 + 2]
         fl = forecast[i]
-        wicon = f['weather_code']['value']
-        wicon = cc_code_icons[wicon]
-
-        dt = dateutil.parser.parse(f['observation_time']['value']) \
+        wicon = f['values']['weatherCode']
+        wicon = tm_code_icons[wicon]
+        dt = dateutil.parser.parse(f['startTime']) \
             .astimezone(tzlocal.get_localzone())
         if dt.day == datetime.datetime.now().day:
             fdaytime = daytime
         else:
             fsunrise = sun.sunrise(dt)
             fsunset = sun.sunset(dt)
-            print('calc daytime', fdaytime, dt, fsunrise, fsunset)
-            if dt.time() >= fsunrise and dt.time() <= fsunset:
+            # print('calc daytime', fdaytime, dt, fsunrise, fsunset)
+            if fsunrise <= dt.time() <= fsunset:
                 fdaytime = True
             else:
                 fdaytime = False
 
         if not fdaytime:
             wicon = wicon.replace('-day', '-night')
-        icon = fl.findChild(QtGui.QLabel, "icon")
-        wxiconpixmap = QtGui.QPixmap(
-            Config.icons + "/" + wicon + ".png")
+        icon = fl.findChild(QtGui.QLabel, 'icon')
+        wxiconpixmap = QtGui.QPixmap(Config.icons + '/' + wicon + '.png')
         icon.setPixmap(wxiconpixmap.scaled(
             icon.width(),
             icon.height(),
             Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation))
-        wx = fl.findChild(QtGui.QLabel, "wx")
-        day = fl.findChild(QtGui.QLabel, "day")
-        day.setText("{0:%A %I:%M%p}".format(
-            dateutil.parser.parse(f['observation_time']['value'])
-            .astimezone(tzlocal.get_localzone())))
+        wx = fl.findChild(QtGui.QLabel, 'wx')
+        day = fl.findChild(QtGui.QLabel, 'day')
+        day.setText('{0:%A %I:%M%p}'.format(dt))
         s = ''
-        pop = float(f['precipitation_probability']['value'])
-        ptype = f['precipitation_type']['value']
-        if ptype == 'none':
+        pop = float(f['values']['precipitationProbability'])
+        ptype = f['values']['precipitationType']
+        if ptype == 0:
             ptype = ''
-        paccum = f['precipitation']['value']
+        paccum = f['values']['precipitationIntensity']
 
-        if (pop > 0.0 or ptype != ''):
+        if pop > 0.0 or ptype != '':
             s += '%.0f' % pop + '% '
         if Config.metric:
-            if (ptype == 'snow'):
-                if (paccum > 0.01):
-                    s += Config.LSnow + '%.0f' % heightm(paccum) + 'mm '
+            if ptype == 2:
+                if paccum > 0.01:
+                    s += Config.LSnow + '%.0f' % heightm(paccum) + 'mm/hr '
             else:
-                if (paccum > 0.01):
-                    s += Config.LRain + '%.0f' % heightm(paccum) + 'mm '
-            s += '%.0f' % tempm(f['temp']['value']) + u'°C'
+                if paccum > 0.01:
+                    s += Config.LRain + '%.0f' % heightm(paccum) + 'mm/hr '
+            s += '%.0f' % tempm(f['values']['temperature']) + u'°C'
         else:
-            if (ptype == 'snow'):
-                if (paccum > 0.01):
-                    s += Config.LSnow + '%.0f' % paccum + 'in '
+            if ptype == 2:
+                if paccum > 0.01:
+                    s += Config.LSnow + '%.1f' % paccum + 'in/hr '
             else:
-                if (paccum > 0.01):
-                    s += Config.LRain + '%.0f' % paccum + 'in '
-            s += '%.0f' % (f['temp']['value']) + u'°F'
+                if paccum > 0.01:
+                    s += Config.LRain + '%.1f' % paccum + 'in/hr '
+            s += '%.0f' % (f['values']['temperature']) + u'°F'
 
-        wx.setStyleSheet(
-            "#wx { font-size: " +
-            str(int(25 * xscale * Config.fontmult)) + "px; }")
-        wx.setText(cc_code_map[f['weather_code']['value']] + "\n" + s)
+        wx.setStyleSheet('#wx { font-size: ' + str(int(19 * xscale * Config.fontmult)) + 'px; }')
+        wx.setText(tm_code_map[f['values']['weatherCode']] + '\n' + s)
 
 
-def wxfinished_cc3():
-    global wxreply3, forecast
+def wxfinished_tm3():
+    global wxreply3, wxdata3, forecast
     global daytime
+
     wxstr3 = str(wxreply3.readAll())
-    # print('cc2', wxstr2)
-    wxdata3 = json.loads(wxstr3)
+
+    try:
+        wxdata3 = json.loads(wxstr3)
+    except ValueError:  # includes json.decoder.JSONDecodeError
+        print(traceback.format_exc())
+        print('Response from api.tomorrow.io: ' + wxstr3)
+        return  # ignore and try again on the next refresh
+
+    if 'message' in wxdata3:
+        print('ERROR code ' + str(wxdata3['code']) + ' from api.tomorrow.io: ' + wxdata3['type'] + ' - ' +
+              wxdata3['message'])
+        return
+
+    dt = dateutil.parser.parse(wxdata3['data']['timelines'][0]['startTime'])
     ioff = 0
-    dt = dateutil.parser.parse(
-        wxdata3[0]['observation_time']['value']+"T00:00:00")
     if datetime.datetime.now().day != dt.day:
         ioff += 1
     for i in range(3, 9):
-        f = wxdata3[i - 3 + ioff]
-        wicon = f['weather_code']['value']
-        wicon = cc_code_icons[wicon]
+        f = wxdata3['data']['timelines'][0]['intervals'][i - 3 + ioff]
+        wicon = f['values']['weatherCode']
+        wicon = tm_code_icons[wicon]
         fl = forecast[i]
-        icon = fl.findChild(QtGui.QLabel, "icon")
-        wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + wicon + ".png")
+        icon = fl.findChild(QtGui.QLabel, 'icon')
+        wxiconpixmap = QtGui.QPixmap(Config.icons + '/' + wicon + '.png')
         icon.setPixmap(wxiconpixmap.scaled(
             icon.width(),
             icon.height(),
             Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation))
-        wx = fl.findChild(QtGui.QLabel, "wx")
-        day = fl.findChild(QtGui.QLabel, "day")
-        day.setText("{0:%A}".format(
-            dateutil.parser.parse(
-                f['observation_time']['value']+"T00:00:00"
-            )
-            ))
+        wx = fl.findChild(QtGui.QLabel, 'wx')
+        day = fl.findChild(QtGui.QLabel, 'day')
+        day.setText('{0:%A}'.format(dateutil.parser.parse(f['startTime'])))
         s = ''
-        pop = float(f['precipitation_probability']['value'])
+        pop = float(f['values']['precipitationProbability'])
         ptype = ''
-        paccum = float(f['precipitation_accumulation']['value'])
-        wc = f['weather_code']['value']
-        if 'rain' in wc:
+        paccum = float(f['values']['precipitationIntensity'])
+        wc = tm_code_icons[f['values']['weatherCode']]
+
+        if '4000' in wc:
             ptype = 'rain'
-        if 'drizzle' in wc:
+        if '4001' in wc:
             ptype = 'rain'
-        if 'ice' in wc:
+        if '4200' in wc:
+            ptype = 'rain'
+        if '4201' in wc:
+            ptype = 'rain'
+        if '5000' in wc:
             ptype = 'snow'
-        if 'flurries' in wc:
+        if '5001' in wc:
             ptype = 'snow'
-        if 'snow' in wc:
+        if '5100' in wc:
             ptype = 'snow'
-        if 'tstorm' in wc:
+        if '5101' in wc:
+            ptype = 'snow'
+        if '6000' in wc:
+            ptype = 'rain'
+        if '6001' in wc:
+            ptype = 'rain'
+        if '6200' in wc:
+            ptype = 'rain'
+        if '6201' in wc:
+            ptype = 'rain'
+        if '7000' in wc:
+            ptype = 'snow'
+        if '7101' in wc:
+            ptype = 'snow'
+        if '7102' in wc:
+            ptype = 'snow'
+        if '8000' in wc:
             ptype = 'rain'
 
-        # if (pop > 0.05 and ptype == ''):
-        #     if f['temp'][1]['max']['value'] > 28:
-        #         ptype = 'rain'
-        #     else:
-        #         ptype = 'snow'
-        if (pop > 0.05 or ptype != ''):
+        if pop > 0.05 or ptype != '':
             s += '%.0f' % pop + '% '
         if Config.metric:
-            if (ptype == 'snow'):
-                if (paccum > 0.01):
-                    s += Config.LSnow + '%.0f' % heightm(paccum*15) + 'mm '
+            if ptype == 'snow':
+                if paccum > 0.01:
+                    s += Config.LSnow + '%.0f' % heightm(paccum * 15) + 'mm/hr '
             else:
-                if (paccum > 0.01):
-                    s += Config.LRain + '%.0f' % heightm(paccum) + 'mm '
-            s += '%.0f' % tempm(f['temp'][1]['max']['value']) + '/' + \
-                 '%.0f' % tempm(f['temp'][0]['min']['value'])
+                if paccum > 0.01:
+                    s += Config.LRain + '%.0f' % heightm(paccum) + 'mm/hr '
+            s += '%.0f' % tempm(f['values']['temperatureMax']) + '/' + \
+                 '%.0f' % tempm(f['values']['temperatureMin']) + u'°C'
         else:
-            if (ptype == 'snow'):
-                if (paccum > 0.01):
-                    s += Config.LSnow + '%.1f' % (paccum*15) + 'in '
+            if ptype == 'snow':
+                if paccum > 0.01:
+                    s += Config.LSnow + '%.1f' % (paccum * 15) + 'in/hr '
             else:
-                if (paccum > 0.01):
-                    s += Config.LRain + '%.1f' % paccum + 'in '
-            s += '%.0f' % f['temp'][1]['max']['value'] + '/' + \
-                 '%.0f' % f['temp'][0]['min']['value']
+                if paccum > 0.01:
+                    s += Config.LRain + '%.1f' % paccum + 'in/hr '
+            s += '%.0f' % f['values']['temperatureMax'] + '/' + \
+                 '%.0f' % f['values']['temperatureMin'] + u'°F'
 
-        wx.setStyleSheet(
-            "#wx { font-size: "
-            + str(int(19 * xscale * Config.fontmult)) + "px; }")
-        wx.setText(cc_code_map[f['weather_code']['value']] + "\n" + s)
+        wx.setStyleSheet('#wx { font-size: ' + str(int(19 * xscale * Config.fontmult)) + 'px; }')
+        wx.setText(tm_code_map[f['values']['weatherCode']] + '\n' + s)
 
 
 metar_cond = [
@@ -1232,20 +1380,13 @@ def getwx():
         pass
 
     try:
-        ApiKeys.dsapi
-        getwx_ds()
-        return
-    except:
-        pass
-
-    try:
-        ApiKeys.ccapi
-        global cc_code_map
+        ApiKeys.tmapi
+        global tm_code_map
         try:
-            cc_code_map = Config.Lcc_code_map
+            tm_code_map = Config.Ltm_code_map
         except:
             pass
-        getwx_cc()
+        getwx_tm()
         return
     except:
         pass
@@ -1258,30 +1399,21 @@ def getwx():
         pass
 
 
-def getwx_ds():
-    global wxurl
-    global wxreply
-    print "getting current and forecast:" + time.ctime()
-    wxurl = 'https://api.darksky.net/forecast/' + \
-        ApiKeys.dsapi + \
-        '/'
-    wxurl += str(Config.location.lat) + ',' + \
-        str(Config.location.lng)
-    wxurl += '?units=us&lang=' + Config.Language.lower()
-    wxurl += '&r=' + str(random.random())
-    print wxurl
-    r = QUrl(wxurl)
-    r = QNetworkRequest(r)
-    wxreply = manager.get(r)
-    wxreply.finished.connect(wxfinished_ds)
-
-
 def getwx_owm():
     global wxurl
-    global wxreply
+    global wxreply, wxreplyc, wxreplyf
+    global hasMetar
+    global owmonecall
     print("getting current and forecast:" + time.ctime())
-    wxurl = 'https://api.openweathermap.org/data/2.5/onecall?appid=' + \
-        ApiKeys.owmapi
+    # we try onecall once, if it fails, then we go to two calls 
+    # older owm api keys work with onecall
+    # newer keys do not
+    if owmonecall:
+        wxurl = 'https://api.openweathermap.org/data/2.5/onecall?appid=' + \
+            ApiKeys.owmapi
+    else:
+        wxurl = 'https://api.openweathermap.org/data/2.5/forecast?appid=' + \
+            ApiKeys.owmapi
     wxurl += "&lat=" + str(Config.location.lat) + '&lon=' + \
         str(Config.location.lng)
     wxurl += '&units=imperial&lang=' + Config.Language.lower()
@@ -1289,59 +1421,67 @@ def getwx_owm():
     print(wxurl)
     r = QUrl(wxurl)
     r = QNetworkRequest(r)
-    wxreply = manager.get(r)
-    wxreply.finished.connect(wxfinished_owm)
+    if owmonecall:
+        wxreply = manager.get(r)
+        wxreply.finished.connect(wxfinished_owm)
+    else:
+        wxreplyf = manager.get(r)
+        wxreplyf.finished.connect(wxfinished_owm_forecast)
+    if hasMetar == False and owmonecall == False:
+        wxurl = 'https://api.openweathermap.org/data/2.5/weather?appid=' + \
+            ApiKeys.owmapi
+        wxurl += "&lat=" + str(Config.location.lat) + '&lon=' + \
+            str(Config.location.lng)
+        wxurl += '&units=imperial&lang=' + Config.Language.lower()
+        wxurl += '&r=' + str(random.random())
+        print(wxurl)
+        r = QUrl(wxurl)
+        r = QNetworkRequest(r)
+        wxreplyc = manager.get(r)
+        wxreplyc.finished.connect(wxfinished_owm_current)
 
-
-def getwx_cc():
+def getwx_tm():
     global wxurl
     global wxurl2
     global wxurl3
     global wxreply
     global wxreply2
     global wxreply3
-    print("getting current:" + time.ctime())
-    wxurl = 'https://api.climacell.co/v3/weather/realtime?apikey=' + \
-        ApiKeys.ccapi
-    wxurl += "&lat=" + str(Config.location.lat) + '&lon=' + \
-        str(Config.location.lng)
-    wxurl += '&unit_system=us'
-    wxurl += '&fields=temp,weather_code,feels_like,humidity,'
-    wxurl += 'wind_speed,wind_direction,wind_gust,baro_pressure'
+    print('getting current: ' + time.ctime())
+    wxurl = 'https://api.tomorrow.io/v4/timelines?timesteps=current&apikey=' + ApiKeys.tmapi
+    wxurl += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
+    wxurl += '&units=imperial'
+    wxurl += '&fields=temperature,weatherCode,temperatureApparent,humidity,'
+    wxurl += 'windSpeed,windDirection,windGust,pressureSurfaceLevel,precipitationType'
     print(wxurl)
     r = QUrl(wxurl)
     r = QNetworkRequest(r)
     wxreply = manager.get(r)
-    wxreply.finished.connect(wxfinished_cc)
+    wxreply.finished.connect(wxfinished_tm)
 
-    print("getting hourly:" + time.ctime())
-    wxurl2 = 'https://api.climacell.co/v3/weather/forecast/hourly?apikey=' + \
-        ApiKeys.ccapi
-    wxurl2 += "&lat=" + str(Config.location.lat) + '&lon=' + \
-        str(Config.location.lng)
-    wxurl2 += '&unit_system=us'
-    wxurl2 += '&fields=temp,precipitation,precipitation_type,'
-    wxurl2 += 'precipitation_probability,weather_code'
+    print('getting hourly: ' + time.ctime())
+    wxurl2 = 'https://api.tomorrow.io/v4/timelines?timesteps=1h&apikey=' + ApiKeys.tmapi
+    wxurl2 += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
+    wxurl2 += '&units=imperial'
+    wxurl2 += '&fields=temperature,precipitationIntensity,precipitationType,'
+    wxurl2 += 'precipitationProbability,weatherCode'
     print(wxurl2)
     r2 = QUrl(wxurl2)
     r2 = QNetworkRequest(r2)
     wxreply2 = manager.get(r2)
-    wxreply2.finished.connect(wxfinished_cc2)
+    wxreply2.finished.connect(wxfinished_tm2)
 
-    print("getting daily:" + time.ctime())
-    wxurl3 = 'https://api.climacell.co/v3/weather/forecast/daily?apikey=' + \
-        ApiKeys.ccapi
-    wxurl3 += "&lat=" + str(Config.location.lat) + '&lon=' + \
-        str(Config.location.lng)
-    wxurl3 += '&unit_system=us'
-    wxurl3 += '&fields=temp,precipitation_accumulation,'
-    wxurl3 += 'precipitation_probability,weather_code'
+    print('getting daily: ' + time.ctime())
+    wxurl3 = 'https://api.tomorrow.io/v4/timelines?timesteps=1d&apikey=' + ApiKeys.tmapi
+    wxurl3 += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
+    wxurl3 += '&units=imperial'
+    wxurl3 += '&fields=temperature,precipitationIntensity,precipitationType,'
+    wxurl3 += 'precipitationProbability,weatherCode,temperatureMax,temperatureMin'
     print(wxurl3)
     r3 = QUrl(wxurl3)
     r3 = QNetworkRequest(r3)
     wxreply3 = manager.get(r3)
-    wxreply3.finished.connect(wxfinished_cc3)
-
+    wxreply3.finished.connect(wxfinished_tm3)
 
 def getwx_metar():
     global metarurl
@@ -1369,7 +1509,7 @@ def qtstart():
     global objradar4
     global sun, daytime, sunrise, sunset
 
-    dt = datetime.datetime.now().replace(tzinfo=tzlocal.get_localzone())
+    dt = datetime.datetime.now(tz=tzlocal.get_localzone())
     sun = suntimes(Config.location.lat, Config.location.lng)
     sunrise = sun.sunrise(dt)
     sunset = sun.sunset(dt)
@@ -2037,9 +2177,10 @@ try:
 except AttributeError:
     pass
 
-
+hasMetar = False;
 try:
     if Config.METAR != '':
+        hasMetar = True;
         from metar import Metar
 except AttributeError:
     pass
@@ -2410,6 +2551,7 @@ temp.setStyleSheet("#temp { font-family:sans-serif; color: " +
 temp.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
 temp.setGeometry(0, height - 100 * yscale, width, 50 * yscale)
 
+owmonecall = True
 
 forecast = []
 for i in range(0, 9):

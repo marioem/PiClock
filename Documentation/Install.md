@@ -2,7 +2,7 @@
 ## For Raspbian Stretch
 
 PiClock and this install guide are based on Raspian Stretch downloaded from
-https://www.raspberrypi.org/downloads/raspbian/ I suggest using
+https://downloads.raspberrypi.org/raspbian/images/raspbian-2019-04-09/ I suggest using
 "Raspbian Stretch with desktop"  It will work with many raspbian versions,
 but you may have to add more packages, etc.  That exercise is left for the reader.
 
@@ -13,8 +13,24 @@ regarding setting up the basic hardware for your Raspi.
 
 ### Download Raspbian Stretch and put it on an SD Card
 
-The instructions for doing this are on the following page:
-https://www.raspberrypi.org/documentation/installation/installing-images/README.md
+Download the zip file, and unzip it.  You'll have a .img file.  You'll need
+an Imaging program like Win32 Disk Imager http://sourceforge.net/projects/win32diskimager/
+
+![Win32 Disk Imager](https://cdn.shopify.com/s/files/1/0176/3274/files/6_6153a773-ecc0-4ba5-9b01-d2aa7780cc8f_1024x1024.png "Win32 Disk Imager")
+
+Now, insert your SD card into your laptop/computer and browse to your image file.
+
+![Choose Image and SD Card](https://cdn.shopify.com/s/files/1/0176/3274/files/7_1024x1024.png "Choose Image and SD Card")
+
+**BEFORE YOU HIT WRITE - Please make sure that you have selected the correct device.
+Win32 will pick up any removable media including SSD's. The last thing you want to 
+do is overwrite your computer's hard drive!**
+
+When you're happy that you have the **correct image**, and **correct device**, hit write.
+
+You'll get a warning message to confirm that you're happy to proceed. 
+Hit yes, and the image will burn to your card.
+
 
 ### First boot and configure
 A keyboard and mouse are really handy at this point.
@@ -497,3 +513,28 @@ cd PiClock/Button
 rm gpio-keys
 make gpio-keys
 ```
+
+### Updating on very old Raspbian versions
+If your log shows error messages regarding dateutil or tzlocal you'll need
+to install them using pip.  Since these are very old versions you'll need to
+download them.
+
+These steps worked on my old Raspbian GNU/Linux 7 (wheezy), which I installed in 
+2015.
+
+```
+sudo su -  # becoming root
+wget https://files.pythonhosted.org/packages/d9/5a/e7c31adbe875f2abbb91bd84cf2dc52d792b5a01506781dbcf25c91daf11/six-1.16.0-py2.py3-none-any.whl
+wget https://files.pythonhosted.org/packages/36/7a/87837f39d0296e723bb9b62bbb257d0355c7f6128853c78955f57342a56d/python_dateutil-2.8.2-py2.py3-none-any.whl
+wget https://files.pythonhosted.org/packages/61/28/1d3920e4d1d50b19bc5d24398a7cd85cc7b9a75a490570d5a30c57622d34/pytz-2018.9-py2.py3-none-any.whl
+wget https://files.pythonhosted.org/packages/cb/89/e3687d3ed99bc882793f82634e9824e62499fdfdc4b1ae39e211c5b05017/tzlocal-1.5.1.tar.gz
+wget https://files.pythonhosted.org/packages/53/97/7cc5be0d41443ba5d6b700e749f43716ff87a7ce2dbd87e92fe97e04c369/python-metar-1.4.0.tar.gz
+
+pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org six-1.16.0-py2.py3-none-any.whl
+pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org python_dateutil-2.8.2-py2.py3-none-any.whl
+pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org pytz-2018.9-py2.py3-none-any.whl
+pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org tzlocal-1.5.1.tar.gz
+pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org python-metar-1.4.0.tar.gz 
+
+```
+
