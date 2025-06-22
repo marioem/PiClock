@@ -29,6 +29,22 @@ sys.dont_write_bytecode = True
 from GoogleMercatorProjection import getCorners, getPoint, getTileXY, LatLng  # NOQA
 import ApiKeys                                              # NOQA
 
+# Global icon cache
+icon_pixmap_cache = {}
+
+def load_icon_pixmaps(icon_dir, icon_names):
+    """
+    Preload and cache all weather icon pixmaps at startup.
+    icon_dir: directory with icon images
+    icon_names: list or set of icon base names (without .png)
+    """
+    for name in icon_names:
+        path = os.path.join(icon_dir, name + ".png")
+        if os.path.isfile(path):
+            icon_pixmap_cache[name] = QtGui.QPixmap(path)
+        else:
+            # Optionally, handle missing icons
+            icon_pixmap_cache[name] = QtGui.QPixmap()  # Empty pixmap
 
 class tzutc(datetime.tzinfo):
     def utcoffset(self, dt):
@@ -153,6 +169,8 @@ def moon_phase(dt=None):
     return lunations % 1.0
 
 
+# v3.0.1 changes:
+# - Only update/redraw widgets if the displayed value has changed.
 def tick():
     global hourpixmap, minpixmap, secpixmap
     global hourpixmap2, minpixmap2, secpixmap2
@@ -176,12 +194,11 @@ def tick():
         pass
     if Config.digital:
         timestr = Config.digitalformat.format(now)
-        if Config.digitalformat.find("%I") > -1:
-            if timestr[0] == '0':
-                timestr = timestr[1:99]
+        if Config.digitalformat.find("%I") > -1 and timestr[0] == '0':
+            timestr = timestr[1:]
         if lasttimestr != timestr:
             clockface.setText(timestr.lower())
-        lasttimestr = timestr
+            lasttimestr = timestr
     else:
         angle = now.second * 6
         ts = secpixmap.size()
@@ -238,9 +255,8 @@ def tick():
             )
 
     dy = Config.digitalformat2.format(now)
-    if Config.digitalformat2.find("%I") > -1:
-        if dy[0] == '0':
-            dy = dy[1:99]
+    if Config.digitalformat2.find("%I") > -1 and dy[0] == '0':
+        dy = dy[1:]
     if dy != pdy:
         pdy = dy
         datey2.setText(dy)
@@ -414,7 +430,7 @@ def wxfinished_owm_current():
     attribution.setText("openweathermap.org")
     attribution2.setText("openweathermap.org")    
     wxstr = wxreplyc.readAll().data().decode('utf8')
-    print(type(wxstr))
+    # print(type(wxstr))
     try:
         wxdata = json.loads(wxstr)
     except ValueError:  # includes json.decoder.JSONDecodeError
@@ -425,7 +441,7 @@ def wxfinished_owm_current():
         f = wxdata
         icon = f['weather'][0]['icon']
         icon = owmicons[icon]
-        wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + icon + ".png")
+        wxiconpixmap = icon_pixmap_cache.get(icon, QtGui.QPixmap())
         wxicon.setPixmap(wxiconpixmap.scaled(
             wxicon.width(), wxicon.height(), Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation))
@@ -512,7 +528,7 @@ def wxfinished_owm_forecast():
     attribution2.setText("openweathermap.org")
 
     wxstr = wxreplyf.readAll().data().decode('utf8')
-    print(type(wxstr))
+    # print(type(wxstr))
     try:
         wxdata = json.loads(wxstr)
     except ValueError:  # includes json.decoder.JSONDecodeError
@@ -526,8 +542,7 @@ def wxfinished_owm_forecast():
         wicon = f['weather'][0]['icon']
         wicon = owmicons[wicon]
         icon = fl.findChild(QtWidgets.QLabel, "icon")
-        wxiconpixmap = QtGui.QPixmap(
-            Config.icons + "/" + wicon + ".png")
+        wxiconpixmap = icon_pixmap_cache.get(wicon, QtGui.QPixmap())
         icon.setPixmap(wxiconpixmap.scaled(
             icon.width(),
             icon.height(),
@@ -651,8 +666,7 @@ def wxfinished_owm_forecast():
         wx.setText(f['weather'][0]['description'].title() + "\n" + s)
 
         wicon = owmicons[wicon]
-        wxiconpixmap = QtGui.QPixmap(
-            Config.icons + "/" + wicon + ".png")
+        wxiconpixmap = icon_pixmap_cache.get(wicon, QtGui.QPixmap())
         icon.setPixmap(wxiconpixmap.scaled(
             icon.width(),
             icon.height(),
@@ -667,9 +681,9 @@ def wxfinished_owm_forecast():
 
 def getmost(a):
     b = dict((i, a.count(i)) for i in a)  # list to key and counts
-    print('getmost b', b)
+    # print('getmost b', b)
     c = sorted(b, key=b.get)  # sort by counts
-    print('getmost sorted', c)
+    # print('getmost sorted', c)
     return c[-1]  # get last (most counted) item
 
 def wxfinished_owm():
@@ -702,7 +716,7 @@ def wxfinished_owm():
     attribution2.setText("openweathermap.org")
 
     wxstr = wxreply.readAll().data().decode('utf8')
-    print(type(wxstr))
+    # print(type(wxstr))
     
     if ('Invalid API' in wxstr): # sometimes we get a 0 byte, crashing json.loads
         print("OWM one call failed, switching to weather and forecast")
@@ -722,7 +736,7 @@ def wxfinished_owm():
     icon = f['weather'][0]['icon']
     icon = owmicons[icon]
     if not supress_current:
-        wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + icon + ".png")
+        wxiconpixmap = icon_pixmap_cache.get(icon, QtGui.QPixmap())
         wxicon.setPixmap(wxiconpixmap.scaled(
             wxicon.width(), wxicon.height(), Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation))
@@ -784,8 +798,7 @@ def wxfinished_owm():
         wicon = f['weather'][0]['icon']
         wicon = owmicons[wicon]
         icon = fl.findChild(QtWidgets.QLabel, "icon")
-        wxiconpixmap = QtGui.QPixmap(
-            Config.icons + "/" + wicon + ".png")
+        wxiconpixmap = icon_pixmap_cache.get(wicon, QtGui.QPixmap())
         icon.setPixmap(wxiconpixmap.scaled(
             icon.width(),
             icon.height(),
@@ -838,7 +851,7 @@ def wxfinished_owm():
         wicon = owmicons[wicon]
         fl = forecast[i]
         icon = fl.findChild(QtWidgets.QLabel, "icon")
-        wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + wicon + ".png")
+        wxiconpixmap = icon_pixmap_cache.get(wicon, QtGui.QPixmap())
         icon.setPixmap(wxiconpixmap.scaled(
             icon.width(),
             icon.height(),
@@ -953,7 +966,7 @@ def wxfinished_tm():
     attribution2.setText('Tomorrow.io')
 
     wxstr = wxreply.readAll().data().decode('utf8')
-    print(type(wxstr))
+    # print(type(wxstr))
 
     try:
         wxdata = json.loads(wxstr)
@@ -975,7 +988,7 @@ def wxfinished_tm():
     if not daytime:
         icon = icon.replace('-day', '-night')
     if not supress_current:
-        wxiconpixmap = QtGui.QPixmap(Config.icons + '/' + icon + '.png')
+        wxiconpixmap = icon_pixmap_cache.get(icon, QtGui.QPixmap())
         wxicon.setPixmap(wxiconpixmap.scaled(
             wxicon.width(), wxicon.height(), Qt.IgnoreAspectRatio,
             Qt.SmoothTransformation))
@@ -1058,7 +1071,7 @@ def wxfinished_tm2():
         if not fdaytime:
             wicon = wicon.replace('-day', '-night')
         icon = fl.findChild(QtWidgets.QLabel, 'icon')
-        wxiconpixmap = QtGui.QPixmap(Config.icons + '/' + wicon + '.png')
+        wxiconpixmap = icon_pixmap_cache.get(icon, QtGui.QPixmap())
         icon.setPixmap(wxiconpixmap.scaled(
             icon.width(),
             icon.height(),
@@ -1125,7 +1138,7 @@ def wxfinished_tm3():
         wicon = tm_code_icons[wicon]
         fl = forecast[i]
         icon = fl.findChild(QtWidgets.QLabel, 'icon')
-        wxiconpixmap = QtGui.QPixmap(Config.icons + '/' + wicon + '.png')
+        wxiconpixmap = icon_pixmap_cache.get(wicon, QtGui.QPixmap())
         icon.setPixmap(wxiconpixmap.scaled(
             icon.width(),
             icon.height(),
@@ -1285,12 +1298,12 @@ def wxfinished_metar():
     global daytime
 
     wxstr = metarreply.readAll().data().decode('utf8')
-    print(type(wxstr))
-    print('owm forecast', wxstr)
+    # print(type(wxstr))
+    # print('owm forecast', wxstr)
     for wxline in wxstr.splitlines():
         if wxline.startswith(Config.METAR):
             wxstr = wxline
-    print('wxmetar', wxstr)
+    # print('wxmetar', wxstr)
     f = Metar.Metar(wxstr)
     dt = f.time.replace(tzinfo=tzutc()).astimezone(tzlocal.get_localzone())
 
@@ -1331,7 +1344,7 @@ def wxfinished_metar():
     if not daytime:
         icon = icon.replace('-day', '-night')
 
-    wxiconpixmap = QtGui.QPixmap(Config.icons + "/" + icon + ".png")
+    wxiconpixmap = icon_pixmap_cache.get(icon, QtGui.QPixmap())
     wxicon.setPixmap(wxiconpixmap.scaled(
         wxicon.width(), wxicon.height(), Qt.IgnoreAspectRatio,
         Qt.SmoothTransformation))
@@ -1434,7 +1447,7 @@ def getwx_owm():
     global wxreply, wxreplyc, wxreplyf
     global hasMetar
     global owmonecall
-    print("getting current and forecast:" + time.ctime())
+    # print("getting current and forecast:" + time.ctime())
     # we try onecall once, if it fails, then we go to two calls 
     # older owm api keys work with onecall
     # newer keys do not
@@ -1450,7 +1463,7 @@ def getwx_owm():
     #     str(Config.location.lng)
     wxurl += '&units=imperial&lang=' + Config.Language.lower()
     # wxurl += '&r=' + str(random.random())
-    print(wxurl)
+    # print(wxurl)
     r = QUrl(wxurl)
     r = QNetworkRequest(r)
     if owmonecall:
@@ -1478,37 +1491,37 @@ def getwx_tm():
     global wxreply
     global wxreply2
     global wxreply3
-    print('getting current: ' + time.ctime())
+    # print('getting current: ' + time.ctime())
     wxurl = 'https://api.tomorrow.io/v4/timelines?timesteps=current&apikey=' + ApiKeys.tmapi
     wxurl += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
     wxurl += '&units=imperial'
     wxurl += '&fields=temperature,weatherCode,temperatureApparent,humidity,'
     wxurl += 'windSpeed,windDirection,windGust,pressureSurfaceLevel,precipitationType'
-    print(wxurl)
+    # print(wxurl)
     r = QUrl(wxurl)
     r = QNetworkRequest(r)
     wxreply = manager.get(r)
     wxreply.finished.connect(wxfinished_tm)
 
-    print('getting hourly: ' + time.ctime())
+    # print('getting hourly: ' + time.ctime())
     wxurl2 = 'https://api.tomorrow.io/v4/timelines?timesteps=1h&apikey=' + ApiKeys.tmapi
     wxurl2 += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
     wxurl2 += '&units=imperial'
     wxurl2 += '&fields=temperature,precipitationIntensity,precipitationType,'
     wxurl2 += 'precipitationProbability,weatherCode'
-    print(wxurl2)
+    # print(wxurl2)
     r2 = QUrl(wxurl2)
     r2 = QNetworkRequest(r2)
     wxreply2 = manager.get(r2)
     wxreply2.finished.connect(wxfinished_tm2)
 
-    print('getting daily: ' + time.ctime())
+    # print('getting daily: ' + time.ctime())
     wxurl3 = 'https://api.tomorrow.io/v4/timelines?timesteps=1d&apikey=' + ApiKeys.tmapi
     wxurl3 += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
     wxurl3 += '&units=imperial'
     wxurl3 += '&fields=temperature,precipitationIntensity,precipitationType,'
     wxurl3 += 'precipitationProbability,weatherCode,temperatureMax,temperatureMin'
-    print(wxurl3)
+    # print(wxurl3)
     r3 = QUrl(wxurl3)
     r3 = QNetworkRequest(r3)
     wxreply3 = manager.get(r3)
@@ -1520,7 +1533,7 @@ def getwx_metar():
     metarurl = \
         "https://tgftp.nws.noaa.gov/data/observations/metar/stations/" + \
         Config.METAR + ".TXT"
-    print(metarurl)
+    # print(metarurl)
     r = QUrl(metarurl)
     r = QNetworkRequest(r)
     metarreply = manager.get(r)
@@ -1531,6 +1544,8 @@ def getallwx():
     getwx()
 
 
+# v3.0.1 changes:
+# - Timers with random intervals can cause unpredictable CPU spikes. Use fixed intervals where possible, and avoid excessive refresh rates.
 def qtstart():
     global ctimer, wxtimer, temptimer
     global manager
@@ -1550,7 +1565,6 @@ def qtstart():
             daytime = False
 
     getallwx()
-
     gettemp()
 
     objradar1.start(Config.radar_refresh * 60)
@@ -1562,20 +1576,18 @@ def qtstart():
 
     ctimer = QtCore.QTimer()
     ctimer.timeout.connect(tick)
-    ctimer.start(1000)
+    ctimer.start(1000)  # 1 second, don't randomize
 
     wxtimer = QtCore.QTimer()
     wxtimer.timeout.connect(getallwx)
-    wxtimer.start(int(1000 * Config.weather_refresh *
-                  60 + random.uniform(1000, 10000)))
+    wxtimer.start(int(1000 * Config.weather_refresh * 60))  # fixed interval
 
     temptimer = QtCore.QTimer()
     temptimer.timeout.connect(gettemp)
-    temptimer.start(int(1000 * 10 * 60 + random.uniform(1000, 10000)))
+    temptimer.start(int(1000 * 10 * 60))  # fixed interval
 
     if Config.useslideshow:
         objimage1.start(Config.slide_time)
-
 
 class SS(QtWidgets.QLabel):
     def __init__(self, parent, rect, myname):
@@ -1596,6 +1608,9 @@ class SS(QtWidgets.QLabel):
                            Config.slide_bg_color + "; }")
         self.setAlignment(Qt.AlignHCenter | Qt.AlignCenter)
 
+        self.image_cache = {}  # Add a cache dictionary
+
+
     def start(self, interval):
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.run_ss)
@@ -1610,7 +1625,10 @@ class SS(QtWidgets.QLabel):
             pass
 
     def run_ss(self):
-        self.get_images()
+        # Only reload images if the directory contents have changed
+        if not hasattr(self, 'last_dir_content') or self.last_dir_content != os.listdir(Config.slides):
+            self.get_images()
+            self.last_dir_content = os.listdir(Config.slides)
         self.switch_image()
 
     def switch_image(self):
@@ -1623,13 +1641,16 @@ class SS(QtWidgets.QLabel):
                 self.img_inc = 1
 
     def show_image(self, image):
-        image = QtGui.QImage(image)
-
-        bg = QtGui.QPixmap.fromImage(image)
-        self.setPixmap(bg.scaled(
+        if image in self.image_cache:
+            bg = self.image_cache[image]
+        else:
+            img = QtGui.QImage(image)
+            bg = QtGui.QPixmap.fromImage(img).scaled(
                 self.size(),
                 QtCore.Qt.KeepAspectRatio,
-                QtCore.Qt.SmoothTransformation))
+                QtCore.Qt.SmoothTransformation)
+            self.image_cache[image] = bg
+        self.setPixmap(bg)
 
     def get_images(self):
         self.get_local(Config.slides)
@@ -1671,7 +1692,7 @@ class Radar(QtWidgets.QLabel):
         self.point = radar["center"]
         self.radar = radar
         self.baseurl = self.mapurl(radar, rect)
-        print("map base url: " + self.baseurl)
+        # print("map base url: " + self.baseurl)
         QtWidgets.QLabel.__init__(self, parent)
         self.interval = Config.radar_refresh * 60
         self.lastwx = 0
@@ -1777,7 +1798,7 @@ class Radar(QtWidgets.QLabel):
         self.frameImages = newf
         firstt = t - self.anim * 600
         for tt in range(firstt, t+1, 600):
-            print("get... " + str(tt) + " " + self.myname)
+            # print("get... " + str(tt) + " " + self.myname)
             gotit = False
             for f in self.frameImages:
                 if f["time"] == tt:
@@ -1797,7 +1818,7 @@ class Radar(QtWidgets.QLabel):
                 tileurl = "https://tilecache.rainviewer.com/v2/radar/%d/%s" \
                     % (t, tt)
                 self.tileurls.append(tileurl)
-        print(self.myname + " " + str(self.getIndex) + " " + self.tileurls[i])
+        # print(self.myname + " " + str(self.getIndex) + " " + self.tileurls[i])
         self.tilereq = QNetworkRequest(QUrl(self.tileurls[i]))
         self.tilereply = manager.get(self.tilereq)
         # QtCore.QObject.connect(self.tilereply, QtCore.SIGNAL(
@@ -1805,7 +1826,7 @@ class Radar(QtWidgets.QLabel):
         self.tilereply.finished.connect(self.getTilesReply)
 
     def getTilesReply(self):
-        print("getTilesReply " + str(self.getIndex))
+        # print("getTilesReply " + str(self.getIndex))
         if self.tilereply.error() != QNetworkReply.NoError:
                 return
         self.tileQimages.append(QImage())
@@ -1908,7 +1929,7 @@ class Radar(QtWidgets.QLabel):
             '&'.join(urlp)
 
     def basefinished(self):
-        print('*' * 30, 'basefinished:', self.basereply)
+        # print('*' * 30, 'basefinished:', self.basereply)
         if self.basereply.error() != QNetworkReply.NoError:
             return
         self.basepixmap = QPixmap()
@@ -1970,7 +1991,7 @@ class Radar(QtWidgets.QLabel):
         self.wmk.setPixmap(self.mkpixmap)
 
     def getbase(self):
-        print('*' * 30, 'getbase:', self.baseurl)
+        # print('*' * 30, 'getbase:', self.baseurl)
         global manager
         self.basereq = QNetworkRequest(QUrl(self.baseurl))
         self.basereply = manager.get(self.basereq)
@@ -1987,11 +2008,11 @@ class Radar(QtWidgets.QLabel):
         self.lastget = time.time() - self.interval + random.uniform(3, 10)
 
     def wxstart(self):
-        print("wxstart for " + self.myname)
+        # print("wxstart for " + self.myname)
         self.timer.start(200)
 
     def wxstop(self):
-        print("wxstop for " + self.myname)
+        # print("wxstop for " + self.myname)
         self.timer.stop()
 
     def stop(self):
@@ -2099,6 +2120,18 @@ if not os.path.isfile(configname + ".py"):
 Config = __import__(configname)
 
 # define default values for new/optional config variables.
+# --- Add icon preloading here ---
+
+# Collect all icon names used by OWM and Tomorrow.io
+owmicons_set = {
+    'clear-day', 'partly-cloudy-day', 'rain', 'thunderstorm', 'snow', 'fog',
+    'clear-night', 'partly-cloudy-night', 'cloudy', 'sleet'
+}
+owmicons_set.update(set(tm_code_icons.values()))
+
+load_icon_pixmaps(Config.icons, owmicons_set)
+
+# --- End icon preloading ---
 
 try:
     Config.location

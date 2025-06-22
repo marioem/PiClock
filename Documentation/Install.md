@@ -548,3 +548,4 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org python
 | Revision       | Date           | Description       | 
 |------------|------------------|-------------------|
 | 3.0.0      | 2025-06-22       | Code adapted for Raspberry Pi OS Bookworm 64-bit, Python 3 and QT5. Updated install instructions. |
+| 3.0.1      | 2025-06-22       | Code optimization - redraw screen only when changed, images and icons cached |
