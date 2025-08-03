@@ -635,6 +635,8 @@ def wxfinished_owm_forecast():
         xmaxtemp = -9999 #max   
         ldesc = []
         licon = []
+        # print('*' * 30, 'dx6am:', dx6am)
+        # print('*' * 30, 'dx6amnext:', dx6amnext)
         for f in wxdata['list']:
             dt = datetime.datetime.fromtimestamp(int(f['dt']))
             if dt >= dx6am and dt <= dx6amnext:
@@ -1709,16 +1711,8 @@ class SS(QtWidgets.QLabel):
         else:
             img = QtGui.QImage(image)
             bg = QtGui.QPixmap.fromImage(img).scaled(
-        if image in self.image_cache:
-            bg = self.image_cache[image]
-        else:
-            img = QtGui.QImage(image)
-            bg = QtGui.QPixmap.fromImage(img).scaled(
                 self.size(),
                 QtCore.Qt.KeepAspectRatio,
-                QtCore.Qt.SmoothTransformation)
-            self.image_cache[image] = bg
-        self.setPixmap(bg)
                 QtCore.Qt.SmoothTransformation)
             self.image_cache[image] = bg
         self.setPixmap(bg)
