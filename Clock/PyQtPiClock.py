@@ -13,8 +13,6 @@ import locale
 import random
 import math
 import traceback
-# import urllib
-# import re
 
 from PyQt5 import QtGui, QtCore, QtNetwork, QtWidgets
 from PyQt5.QtGui import QPixmap, QBrush, QColor
@@ -454,7 +452,6 @@ def wxfinished_owm_current():
     attribution2.setText("openweathermap.org")    
     wxstr = wxreplyc.readAll().data().decode('utf8')
     # print(type(wxstr))
-    # print(type(wxstr))
     try:
         wxdata = json.loads(wxstr)
     except ValueError:  # includes json.decoder.JSONDecodeError
@@ -553,7 +550,7 @@ def wxfinished_owm_forecast():
     attribution2.setText("openweathermap.org")
 
     wxstr = wxreplyf.readAll().data().decode('utf8')
-    # print(type(wxstr))
+    print('Response from fotrecast api: ' + wxstr)
     # print(type(wxstr))
     try:
         wxdata = json.loads(wxstr)
@@ -562,6 +559,18 @@ def wxfinished_owm_forecast():
         print('Response from fotrecast api: ' + wxstr)
         return  # ignore and try again on the next refresh
 
+    # Guard against API error responses that don't include the expected 'list'
+    if not isinstance(wxdata, dict) or 'list' not in wxdata:
+        # Log useful info if present and bail out
+        try:
+            if isinstance(wxdata, dict) and ('cod' in wxdata or 'message' in wxdata):
+                print('OWM forecast error:', wxdata.get('cod', ''), wxdata.get('message', ''))
+            else:
+                print('Unexpected forecast response (no "list"):', wxstr)
+        except Exception:
+            print('Unexpected forecast response (no "list"):', wxstr)
+        return
+    
     for i in range(0, 3):
         f = wxdata['list'][i]
         fl = forecast[i]
@@ -712,9 +721,7 @@ def wxfinished_owm_forecast():
 def getmost(a):
     b = dict((i, a.count(i)) for i in a)  # list to key and counts
     # print('getmost b', b)
-    # print('getmost b', b)
     c = sorted(b, key=b.get)  # sort by counts
-    # print('getmost sorted', c)
     # print('getmost sorted', c)
     return c[-1]  # get last (most counted) item
 
@@ -1346,7 +1353,6 @@ def wxfinished_metar():
         if wxline.startswith(Config.METAR):
             wxstr = wxline
     # print('wxmetar', wxstr)
-    # print('wxmetar', wxstr)
     f = Metar.Metar(wxstr)
     dt = f.time.replace(tzinfo=tzutc()).astimezone(tzlocal.get_localzone())
 
@@ -1387,7 +1393,6 @@ def wxfinished_metar():
     if not daytime:
         icon = icon.replace('-day', '-night')
 
-    wxiconpixmap = icon_pixmap_cache.get(icon, QtGui.QPixmap())
     wxiconpixmap = icon_pixmap_cache.get(icon, QtGui.QPixmap())
     wxicon.setPixmap(wxiconpixmap.scaled(
         wxicon.width(), wxicon.height(), Qt.IgnoreAspectRatio,
@@ -1538,13 +1543,11 @@ def getwx_tm():
     global wxreply2
     global wxreply3
     # print('getting current: ' + time.ctime())
-    # print('getting current: ' + time.ctime())
     wxurl = 'https://api.tomorrow.io/v4/timelines?timesteps=current&apikey=' + ApiKeys.tmapi
     wxurl += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
     wxurl += '&units=imperial'
     wxurl += '&fields=temperature,weatherCode,temperatureApparent,humidity,'
     wxurl += 'windSpeed,windDirection,windGust,pressureSurfaceLevel,precipitationType'
-    # print(wxurl)
     # print(wxurl)
     r = QUrl(wxurl)
     r = QNetworkRequest(r)
@@ -1552,20 +1555,17 @@ def getwx_tm():
     wxreply.finished.connect(wxfinished_tm)
 
     # print('getting hourly: ' + time.ctime())
-    # print('getting hourly: ' + time.ctime())
     wxurl2 = 'https://api.tomorrow.io/v4/timelines?timesteps=1h&apikey=' + ApiKeys.tmapi
     wxurl2 += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
     wxurl2 += '&units=imperial'
     wxurl2 += '&fields=temperature,precipitationIntensity,precipitationType,'
     wxurl2 += 'precipitationProbability,weatherCode'
     # print(wxurl2)
-    # print(wxurl2)
     r2 = QUrl(wxurl2)
     r2 = QNetworkRequest(r2)
     wxreply2 = manager.get(r2)
     wxreply2.finished.connect(wxfinished_tm2)
 
-    # print('getting daily: ' + time.ctime())
     # print('getting daily: ' + time.ctime())
     wxurl3 = 'https://api.tomorrow.io/v4/timelines?timesteps=1d&apikey=' + ApiKeys.tmapi
     wxurl3 += '&location=' + str(Config.location.lat) + ',' + str(Config.location.lng)
@@ -1586,7 +1586,6 @@ def getwx_metar():
         "https://tgftp.nws.noaa.gov/data/observations/metar/stations/" + \
         Config.METAR + ".TXT"
     # print(metarurl)
-    # print(metarurl)
     r = QUrl(metarurl)
     r = QNetworkRequest(r)
     metarreply = manager.get(r)
@@ -1597,8 +1596,7 @@ def getallwx():
     getwx()
 
 
-# v3.0.1 changes:
-# - Timers with random intervals can cause unpredictable CPU spikes. Use fixed intervals where possible, and avoid excessive refresh rates.
+
 # v3.0.1 changes:
 # - Timers with random intervals can cause unpredictable CPU spikes. Use fixed intervals where possible, and avoid excessive refresh rates.
 def qtstart():
@@ -1758,7 +1756,6 @@ class Radar(QtWidgets.QLabel):
         self.radar = radar
         self.baseurl = self.mapurl(radar, rect)
         # print("map base url: " + self.baseurl)
-        # print("map base url: " + self.baseurl)
         QtWidgets.QLabel.__init__(self, parent)
         self.interval = Config.radar_refresh * 60
         self.lastwx = 0
@@ -1865,7 +1862,6 @@ class Radar(QtWidgets.QLabel):
         firstt = t - self.anim * 600
         for tt in range(firstt, t+1, 600):
             # print("get... " + str(tt) + " " + self.myname)
-            # print("get... " + str(tt) + " " + self.myname)
             gotit = False
             for f in self.frameImages:
                 if f["time"] == tt:
@@ -1883,10 +1879,9 @@ class Radar(QtWidgets.QLabel):
             self.tileQimages = []
             for tt in self.tiletails:
                 tileurl = "https://tilecache.rainviewer.com/v2/radar/%d/%s" \
-                    % (t, tt)
+                    % (t, tt.lstrip('/'))
                 self.tileurls.append(tileurl)
-        # print(self.myname + " " + str(self.getIndex) + " " + self.tileurls[i])
-        # print(self.myname + " " + str(self.getIndex) + " " + self.tileurls[i])
+        print("Tiles: " + self.myname + " " + str(self.getIndex) + " " + self.tileurls[i])
         self.tilereq = QNetworkRequest(QUrl(self.tileurls[i]))
         self.tilereply = manager.get(self.tilereq)
         # QtCore.QObject.connect(self.tilereply, QtCore.SIGNAL(
@@ -1894,8 +1889,7 @@ class Radar(QtWidgets.QLabel):
         self.tilereply.finished.connect(self.getTilesReply)
 
     def getTilesReply(self):
-        # print("getTilesReply " + str(self.getIndex))
-        # print("getTilesReply " + str(self.getIndex))
+        print("getTilesReply " + str(self.getIndex))
         if self.tilereply.error() != QNetworkReply.NoError:
                 return
         self.tileQimages.append(QImage())
@@ -1998,7 +1992,6 @@ class Radar(QtWidgets.QLabel):
             '&'.join(urlp)
 
     def basefinished(self):
-        # print('*' * 30, 'basefinished:', self.basereply)
         # print('*' * 30, 'basefinished:', self.basereply)
         if self.basereply.error() != QNetworkReply.NoError:
             return
@@ -2381,14 +2374,6 @@ frame2.setStyleSheet("#frame2 { background-color: blue; border-image: url(" +
 frame2.setVisible(False)
 frames.append(frame2)
 
-# frame3 = QtWidgets.QFrame(w)
-# frame3.setObjectName("frame3")
-# frame3.setGeometry(0,0,width,height)
-# frame3.setStyleSheet("#frame3 { background-color: blue; border-image:
-#       url("+Config.background+") 0 0 0 0 stretch stretch;}")
-# frame3.setVisible(False)
-# frames.append(frame3)
-
 foreGround = QtWidgets.QFrame(frame1)
 foreGround.setObjectName("foreGround")
 foreGround.setStyleSheet("#foreGround { background-color: transparent; }")
@@ -2749,16 +2734,8 @@ for i in range(0, 9):
 
 manager = QtNetwork.QNetworkAccessManager()
 
-# proxy = QNetworkProxy()
-# proxy.setType(QNetworkProxy.HttpProxy)
-# proxy.setHostName("localhost")
-# proxy.setPort(8888)
-# QNetworkProxy.setApplicationProxy(proxy)
-
 stimer = QtCore.QTimer()
 stimer.singleShot(10, qtstart)
-
-# print radarurl(Config.radar1,radar1rect)
 
 w.show()
 w.showFullScreen()
