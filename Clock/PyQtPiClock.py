@@ -1918,7 +1918,9 @@ class Radar(QtWidgets.QLabel):
                     QImage.Format_ARGB32)
         painter = QPainter()
         painter.begin(ii)
-        painter.fillRect(0, 0, ii.width(), ii.height(), QColor(0, 0, 0, 255))  # Opaque black to hide base map
+        painter.fillRect(0, 0, ii.width(), ii.height(), QColor(0, 0, 0, 0))  # Transparent
+        if 'radar3' in self.myname or 'radar4' in self.myname:
+            painter.fillRect(0, 0, ii.width(), ii.height(), QColor(0, 0, 0, 255))  # Opaque for big radars
         painter.setPen(QColor(255, 255, 255, 255))
         painter.setFont(QFont("Arial", 10))
         i = 0
@@ -1926,9 +1928,14 @@ class Radar(QtWidgets.QLabel):
         xo = int((int(xo) - xo)*256)
         yo = self.cornerTiles["NW"]["Y"]
         yo = int((int(yo) - yo)*256)
+        copy_x = max(0, -xo)
+        copy_y = max(0, -yo)
+        if self.rect.width() > 640 or self.rect.height() > 640:
+            copy_x = max(0, (self.tilesWidth * 256 - self.rect.width()) // 2)
+            copy_y = max(0, (self.tilesHeight * 256 - self.rect.height()) // 2)
         for y in range(0, self.totalHeight, 256):
             for x in range(0, self.totalWidth, 256):
-                if i in self.tileQimages and not self.tileQimages[i].isNull():
+                if i in self.tileQimages and self.tileQimages[i].format() == 5 and self.tileQimages[i].width() == 256 and self.tileQimages[i].height() == 256:
                     painter.drawImage(x, y, self.tileQimages[i])
                 # painter.drawRect(x, y, 255, 255)
                 # painter.drawText(x+3, y+12, self.tiletails[i])
@@ -1936,7 +1943,7 @@ class Radar(QtWidgets.QLabel):
         painter.end()
         painter = None
         self.tileQimages = {}
-        ii2 = ii.copy(-xo, -yo, self.rect.width(), self.rect.height())
+        ii2 = ii.copy(copy_x, copy_y, self.rect.width(), self.rect.height())
         ii = None
         painter2 = QPainter()
         painter2.begin(ii2)
@@ -1978,10 +1985,10 @@ class Radar(QtWidgets.QLabel):
         style = 'mapbox/satellite-streets-v10'
         if 'style' in radar:
             style = radar['style']
-        # For large maps, use satellite only to avoid street artifacts
+        # For large maps, use dark style to reduce artifacts
         if rect.width() > 640 or rect.height() > 640:
-            if style == 'mapbox/satellite-streets-v10':
-                style = 'mapbox/satellite-v9'
+            if style == 'mapbox/satellite-v9':
+                style = 'mapbox/dark-v10'
         return 'https://api.mapbox.com/styles/v1/' + \
                style + \
                '/static/' + \
@@ -2000,9 +2007,7 @@ class Radar(QtWidgets.QLabel):
             ',' + str(radar['center'].lng))
         zoom = radar['zoom']
         rsize = rect.size()
-        # Cap size at 640x640 to avoid rejection, but don't reduce zoom
-        rsize.setWidth(min(rsize.width(), 640))
-        rsize.setHeight(min(rsize.height(), 640))
+        # Request full size, even if over 640x640
         urlp.append('zoom=' + str(zoom))
         urlp.append('size=' + str(rsize.width()) + 'x' + str(rsize.height()))
         urlp.append('maptype=hybrid')
@@ -2023,7 +2028,7 @@ class Radar(QtWidgets.QLabel):
         if self.basepixmap.size() != self.rect.size():
             self.basepixmap = self.basepixmap.scaled(self.rect.size(),
                                                      Qt.KeepAspectRatio,
-                                                     Qt.SmoothTransformation)
+                                                     Qt.FastTransformation)
         self.setPixmap(self.basepixmap)
 
         # make marker pixmap

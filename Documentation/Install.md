@@ -555,4 +555,5 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org python
 | 3.0.5      | 2025-12-14       | Fixed precipitation animation artifacts on big maps due to rescaling. |
 | 3.0.6      | 2025-12-14       | Another step with fixing animations. |
 | 3.0.7      | 2025-12-14       | Fixed diagonal lines in rain animations by using opaque background for overlays |
+| 3.0.8      | 2025-12-14       | The issue has been narrowed down to filling the gaps in rain when the background fill is not fully opaque, but not solved yet. |
 
