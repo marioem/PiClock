@@ -1622,10 +1622,12 @@ def qtstart():
 
     objradar1.start(Config.radar_refresh * 60)
     objradar1.wxstart()
-    # objradar2.start(Config.radar_refresh * 60)
-    # objradar2.wxstart()
+    objradar2.start(Config.radar_refresh * 60)
+    objradar2.wxstart()
     objradar3.start(Config.radar_refresh * 60)
+    objradar3.wxstart()
     objradar4.start(Config.radar_refresh * 60)
+    objradar4.wxstart()
 
     ctimer = QtCore.QTimer()
     ctimer.timeout.connect(tick)
@@ -1751,6 +1753,9 @@ class Radar(QtWidgets.QLabel):
         self.myname = myname
         self.rect = rect
         self.anim = 5
+        # For large maps, reduce animation frames
+        if rect.width() > 640 or rect.height() > 640:
+            self.anim = 2
         self.zoom = radar["zoom"]
         self.point = radar["center"]
         self.radar = radar
@@ -1845,6 +1850,7 @@ class Radar(QtWidgets.QLabel):
         if self.displayedFrame >= len(self.frameImages):
             self.displayedFrame = 0
         f = self.frameImages[self.displayedFrame]
+        self.wwx.clear()  # Clear previous pixmap to avoid artifacts
         self.wwx.setPixmap(f["image"])
         self.displayedFrame += 1
 
@@ -1886,8 +1892,6 @@ class Radar(QtWidgets.QLabel):
         print("Tiles: " + self.myname + " " + str(self.getIndex) + " " + self.tileurls[i])
         self.tilereq = QNetworkRequest(QUrl(self.tileurls[i]))
         self.tilereply = manager.get(self.tilereq)
-        # QtCore.QObject.connect(self.tilereply, QtCore.SIGNAL(
-        #         "finished()"), self.getTilesReply)
         self.tilereply.finished.connect(self.getTilesReply)
 
     def getTilesReply(self):
@@ -1914,6 +1918,7 @@ class Radar(QtWidgets.QLabel):
                     QImage.Format_ARGB32)
         painter = QPainter()
         painter.begin(ii)
+        painter.fillRect(0, 0, ii.width(), ii.height(), QColor(0, 0, 0, 255))  # Opaque black to hide base map
         painter.setPen(QColor(255, 255, 255, 255))
         painter.setFont(QFont("Arial", 10))
         i = 0
@@ -1958,8 +1963,8 @@ class Radar(QtWidgets.QLabel):
             mb = Config.usemapbox
         except:
             pass
-        # Use Mapbox for large maps to avoid Google scaling artifacts
-        if rect.width() > 640 or rect.height() > 640:
+        # Use Mapbox for large maps if API key is available
+        if (rect.width() > 640 or rect.height() > 640) and hasattr(ApiKeys, 'mbapi') and ApiKeys.mbapi:
             mb = True
         if mb:
             return self.mapboxurl(radar, rect)
@@ -1973,6 +1978,10 @@ class Radar(QtWidgets.QLabel):
         style = 'mapbox/satellite-streets-v10'
         if 'style' in radar:
             style = radar['style']
+        # For large maps, use satellite only to avoid street artifacts
+        if rect.width() > 640 or rect.height() > 640:
+            if style == 'mapbox/satellite-streets-v10':
+                style = 'mapbox/satellite-v9'
         return 'https://api.mapbox.com/styles/v1/' + \
                style + \
                '/static/' + \
