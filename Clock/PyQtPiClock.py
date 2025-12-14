@@ -1622,8 +1622,8 @@ def qtstart():
 
     objradar1.start(Config.radar_refresh * 60)
     objradar1.wxstart()
-    objradar2.start(Config.radar_refresh * 60)
-    objradar2.wxstart()
+    # objradar2.start(Config.radar_refresh * 60)
+    # objradar2.wxstart()
     objradar3.start(Config.radar_refresh * 60)
     objradar4.start(Config.radar_refresh * 60)
 
@@ -1893,9 +1893,12 @@ class Radar(QtWidgets.QLabel):
     def getTilesReply(self):
         print("getTilesReply " + str(self.getIndex))
         if self.tilereply.error() != QNetworkReply.NoError:
+                print("Tile load error for index " + str(self.getIndex) + ": " + self.tilereply.errorString())
                 return
         self.tileQimages[self.getIndex] = QImage()  # Changed to dict assignment
         self.tileQimages[self.getIndex].loadFromData(self.tilereply.readAll())
+        if self.tileQimages[self.getIndex].isNull():
+            print("Failed to load tile image for index " + str(self.getIndex))
         self.getIndex = self.getIndex + 1
         if self.getIndex < len(self.tileurls):
             self.getTiles(self.getTime, self.getIndex)
@@ -1920,7 +1923,7 @@ class Radar(QtWidgets.QLabel):
         yo = int((int(yo) - yo)*256)
         for y in range(0, self.totalHeight, 256):
             for x in range(0, self.totalWidth, 256):
-                if i in self.tileQimages and self.tileQimages[i].format() == 5:
+                if i in self.tileQimages and not self.tileQimages[i].isNull():
                     painter.drawImage(x, y, self.tileQimages[i])
                 # painter.drawRect(x, y, 255, 255)
                 # painter.drawText(x+3, y+12, self.tiletails[i])
@@ -1985,9 +1988,9 @@ class Radar(QtWidgets.QLabel):
             ',' + str(radar['center'].lng))
         zoom = radar['zoom']
         rsize = rect.size()
-        if rsize.width() > 640 or rsize.height() > 640:
-            rsize = QtCore.QSize(rsize.width() / 2, rsize.height() / 2)
-            zoom -= 1
+        # Cap size at 640x640 to avoid rejection, but don't reduce zoom
+        rsize.setWidth(min(rsize.width(), 640))
+        rsize.setHeight(min(rsize.height(), 640))
         urlp.append('zoom=' + str(zoom))
         urlp.append('size=' + str(rsize.width()) + 'x' + str(rsize.height()))
         urlp.append('maptype=hybrid')
@@ -2078,7 +2081,7 @@ class Radar(QtWidgets.QLabel):
     def wxstart(self):
         # print("wxstart for " + self.myname)
         # print("wxstart for " + self.myname)
-        self.timer.start(200)
+        self.timer.start(500)  # Slow down animation to 2 fps to reduce artifacts
 
     def wxstop(self):
         # print("wxstop for " + self.myname)
