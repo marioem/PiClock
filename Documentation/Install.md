@@ -551,3 +551,4 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org python
 | 3.0.1      | 2025-06-22       | Code optimization - redraw screen only when changed, images and icons cached |
 | 3.0.2      | 2025-08-03.      | Small update to show_image |
 | 3.0.3      | 2025-12-07       | Removed spurious '/' in tiles url. Max radar zoom decreased to 10 from 11, which is not supported by rainviewer.com |
+| 3.0.4      | 2025-22-14       | Fixed precipitation animation issues by changing how rainviewer radar images are downloaded and cached. |

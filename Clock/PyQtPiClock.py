@@ -1839,6 +1839,8 @@ class Radar(QtWidgets.QLabel):
             if self.ticker < 5:
                 return
         self.ticker = 0
+        # Sort frames by time to ensure correct order
+        self.frameImages.sort(key=lambda f: f["time"])
         # print('*' * 30, 'rtick: frame:', self.displayedFrame, 'len images:', len(self.frameImages))
         if self.displayedFrame >= len(self.frameImages):
             self.displayedFrame = 0
@@ -1876,7 +1878,7 @@ class Radar(QtWidgets.QLabel):
         self.getIndex = i
         if i == 0:
             self.tileurls = []
-            self.tileQimages = []
+            self.tileQimages = {}  # Changed to dict to handle out-of-order replies
             for tt in self.tiletails:
                 tileurl = "https://tilecache.rainviewer.com/v2/radar/%d/%s" \
                     % (t, tt.lstrip('/'))
@@ -1892,7 +1894,7 @@ class Radar(QtWidgets.QLabel):
         print("getTilesReply " + str(self.getIndex))
         if self.tilereply.error() != QNetworkReply.NoError:
                 return
-        self.tileQimages.append(QImage())
+        self.tileQimages[self.getIndex] = QImage()  # Changed to dict assignment
         self.tileQimages[self.getIndex].loadFromData(self.tilereply.readAll())
         self.getIndex = self.getIndex + 1
         if self.getIndex < len(self.tileurls):
@@ -1903,6 +1905,8 @@ class Radar(QtWidgets.QLabel):
 
     def combineTiles(self):
         global radar1
+        if len(self.tileQimages) < len(self.tileurls):
+            return  # Wait for all tiles to load
         ii = QImage(self.tilesWidth*256, self.tilesHeight*256,
                     QImage.Format_ARGB32)
         painter = QPainter()
@@ -1916,14 +1920,14 @@ class Radar(QtWidgets.QLabel):
         yo = int((int(yo) - yo)*256)
         for y in range(0, self.totalHeight, 256):
             for x in range(0, self.totalWidth, 256):
-                if self.tileQimages[i].format() == 5:
+                if i in self.tileQimages and self.tileQimages[i].format() == 5:
                     painter.drawImage(x, y, self.tileQimages[i])
                 # painter.drawRect(x, y, 255, 255)
                 # painter.drawText(x+3, y+12, self.tiletails[i])
                 i += 1
         painter.end()
         painter = None
-        self.tileQimages = []
+        self.tileQimages = {}
         ii2 = ii.copy(-xo, -yo, self.rect.width(), self.rect.height())
         ii = None
         painter2 = QPainter()
