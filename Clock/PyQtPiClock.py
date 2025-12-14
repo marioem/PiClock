@@ -1958,6 +1958,9 @@ class Radar(QtWidgets.QLabel):
             mb = Config.usemapbox
         except:
             pass
+        # Use Mapbox for large maps to avoid Google scaling artifacts
+        if rect.width() > 640 or rect.height() > 640:
+            mb = True
         if mb:
             return self.mapboxurl(radar, rect)
         else:
@@ -2001,9 +2004,13 @@ class Radar(QtWidgets.QLabel):
     def basefinished(self):
         # print('*' * 30, 'basefinished:', self.basereply)
         if self.basereply.error() != QNetworkReply.NoError:
+            print("Base map load error for " + self.myname + ": " + self.basereply.errorString())
             return
         self.basepixmap = QPixmap()
         self.basepixmap.loadFromData(self.basereply.readAll())
+        if self.basepixmap.isNull():
+            print("Failed to load base map pixmap for " + self.myname)
+            return
         if self.basepixmap.size() != self.rect.size():
             self.basepixmap = self.basepixmap.scaled(self.rect.size(),
                                                      Qt.KeepAspectRatio,

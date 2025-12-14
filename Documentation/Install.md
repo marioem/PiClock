@@ -553,3 +553,4 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org python
 | 3.0.3      | 2025-12-07       | Removed spurious '/' in tiles url. Max radar zoom decreased to 10 from 11, which is not supported by rainviewer.com |
 | 3.0.4      | 2025-12-14       | Fixed precipitation animation issues by changing how rainviewer radar images are downloaded and cached. |
 | 3.0.5      | 2025-12-14       | Fixed precipitation animation artifacts on big maps due to rescaling. |
+| 3.0.6      | 2025-12-14       | Another step with fixing animations. |
