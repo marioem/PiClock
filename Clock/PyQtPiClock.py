@@ -1787,7 +1787,7 @@ class Radar(QtWidgets.QLabel):
 
         self.setObjectName("radar")
         self.setGeometry(rect)
-        self.setStyleSheet("#radar { background-color: grey; }")
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAlignment(Qt.AlignCenter)
 
         self.wwx = QtWidgets.QLabel(self)
@@ -1852,6 +1852,7 @@ class Radar(QtWidgets.QLabel):
         f = self.frameImages[self.displayedFrame]
         self.wwx.clear()  # Clear previous pixmap to avoid artifacts
         self.wwx.setPixmap(f["image"])
+        self.wwx.update()
         self.displayedFrame += 1
 
     def get(self, t=0):
@@ -1903,6 +1904,9 @@ class Radar(QtWidgets.QLabel):
         self.tileQimages[self.getIndex].loadFromData(self.tilereply.readAll())
         if self.tileQimages[self.getIndex].isNull():
             print("Failed to load tile image for index " + str(self.getIndex))
+        else:
+            # Ensure the tile is in ARGB32 format
+            self.tileQimages[self.getIndex] = self.tileQimages[self.getIndex].convertToFormat(QImage.Format_ARGB32)
         self.getIndex = self.getIndex + 1
         if self.getIndex < len(self.tileurls):
             self.getTiles(self.getTime, self.getIndex)
@@ -1919,8 +1923,7 @@ class Radar(QtWidgets.QLabel):
         painter = QPainter()
         painter.begin(ii)
         painter.fillRect(0, 0, ii.width(), ii.height(), QColor(0, 0, 0, 0))  # Transparent
-        if 'radar3' in self.myname or 'radar4' in self.myname:
-            painter.fillRect(0, 0, ii.width(), ii.height(), QColor(0, 0, 0, 255))  # Opaque for big radars
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
         painter.setPen(QColor(255, 255, 255, 255))
         painter.setFont(QFont("Arial", 10))
         i = 0
@@ -1943,7 +1946,14 @@ class Radar(QtWidgets.QLabel):
         painter.end()
         painter = None
         self.tileQimages = {}
-        ii2 = ii.copy(copy_x, copy_y, self.rect.width(), self.rect.height())
+        ii2 = QImage(self.rect.width(), self.rect.height(), QImage.Format_ARGB32)
+        ii2.fill(QColor(0, 0, 0, 0))
+        painter = QPainter(ii2)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        # Draw ii at top-left, clipping if larger
+        painter.drawImage(0, 0, ii)
+        painter.end()
+        painter = None
         ii = None
         painter2 = QPainter()
         painter2.begin(ii2)
