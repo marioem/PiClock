@@ -1832,6 +1832,10 @@ class Radar(QtWidgets.QLabel):
         self.displayedFrame = 0
         self.ticker = 0
         self.lastget = 0
+        self.weatherMapsData = None
+        self.lastWeatherMapsUpdate = 0
+        self.weatherMapsUrl = "https://api.rainviewer.com/public/weather-maps.json"
+        self.radarHost = "https://tilecache.rainviewer.com"
 
     def rtick(self):
         if time.time() > (self.lastget + self.interval):
@@ -1879,16 +1883,80 @@ class Radar(QtWidgets.QLabel):
                 self.getTiles(tt)
                 break
 
+    def fetchWeatherMaps(self):
+        """Fetch the weather maps JSON from RainViewer API"""
+        current_time = time.time()
+        # Refresh weather maps every 10 minutes
+        if self.weatherMapsData and (current_time - self.lastWeatherMapsUpdate < 600):
+            return
+        
+        self.weatherMapsReq = QNetworkRequest(QUrl(self.weatherMapsUrl))
+        self.weatherMapsReply = manager.get(self.weatherMapsReq)
+        self.weatherMapsReply.finished.connect(self.onWeatherMapsReply)
+    
+    def onWeatherMapsReply(self):
+        """Handle the weather maps API response"""
+        if self.weatherMapsReply.error() != QNetworkReply.NoError:
+            print("Weather maps fetch error: " + self.weatherMapsReply.errorString())
+            return
+        
+        try:
+            data = json.loads(str(self.weatherMapsReply.readAll(), 'utf-8'))
+            self.weatherMapsData = data
+            self.lastWeatherMapsUpdate = time.time()
+            if 'host' in data:
+                self.radarHost = data['host']
+            # Retry getting tiles now that we have the weather maps
+            if hasattr(self, '_pending_getTiles'):
+                t, i = self._pending_getTiles
+                del self._pending_getTiles
+                self.getTiles(t, i)
+        except Exception as e:
+            print("Error parsing weather maps: " + str(e))
+    
+    def getRadarPathForTime(self, t):
+        """Get the radar path for a given timestamp"""
+        if not self.weatherMapsData or 'radar' not in self.weatherMapsData:
+            return None
+        
+        radar_data = self.weatherMapsData.get('radar', {})
+        past_frames = radar_data.get('past', [])
+        
+        # Find the closest matching frame
+        best_match = None
+        min_diff = float('inf')
+        
+        for frame in past_frames:
+            frame_time = frame.get('time', 0)
+            diff = abs(frame_time - t)
+            if diff < min_diff:
+                min_diff = diff
+                best_match = frame.get('path')
+        
+        return best_match
+    
     def getTiles(self, t, i=0):
         t = int(t / 600)*600
         self.getTime = t
         self.getIndex = i
         if i == 0:
+            # Ensure we have weather maps data
+            if not self.weatherMapsData:
+                self._pending_getTiles = (t, i)
+                self.fetchWeatherMaps()
+                return
+            
             self.tileurls = []
             self.tileQimages = {}  # Changed to dict to handle out-of-order replies
+            
+            # Get the radar path for this timestamp
+            radarPath = self.getRadarPathForTime(t)
+            if not radarPath:
+                print("No radar data available for time " + str(t))
+                return
+            
             for tt in self.tiletails:
-                tileurl = "https://tilecache.rainviewer.com/v2/radar/%d/%s" \
-                    % (t, tt.lstrip('/'))
+                tileurl = "%s%s/%s" % (self.radarHost, radarPath, tt.lstrip('/'))
                 self.tileurls.append(tileurl)
         print("Tiles: " + self.myname + " " + str(self.getIndex) + " " + self.tileurls[i])
         self.tilereq = QNetworkRequest(QUrl(self.tileurls[i]))
@@ -1950,8 +2018,9 @@ class Radar(QtWidgets.QLabel):
         ii2.fill(QColor(0, 0, 0, 0))
         painter = QPainter(ii2)
         painter.setCompositionMode(QPainter.CompositionMode_Source)
-        # Draw ii at top-left, clipping if larger
-        painter.drawImage(0, 0, ii)
+        # Draw ii with proper offset to handle geographic centering
+        # Use copy_x and copy_y to crop from the combined tiles and position correctly
+        painter.drawImage(0, 0, ii, copy_x, copy_y, self.rect.width(), self.rect.height())
         painter.end()
         painter = None
         ii = None
