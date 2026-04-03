@@ -30,6 +30,20 @@ import ApiKeys                                              # NOQA
 # Global icon cache
 icon_pixmap_cache = {}
 
+# Global radar tile cache (shared by radar widgets on same zoom/path)
+# key: tileurl, value: dict {"image": QImage, "time": timestamp}
+radar_tile_cache = {}
+
+# Cache TTL in seconds (e.g. 20 minutes)
+RADAR_TILE_CACHE_TTL = 20 * 60
+
+def prune_radar_tile_cache():
+    now = time.time()
+    keys_to_remove = [k for k, v in radar_tile_cache.items() if now - v.get("time", 0) > RADAR_TILE_CACHE_TTL]
+    for k in keys_to_remove:
+        del radar_tile_cache[k]
+
+
 def load_icon_pixmaps(icon_dir, icon_names):
     """
     Preload and cache all weather icon pixmaps at startup.
@@ -673,11 +687,8 @@ def wxfinished_owm_forecast():
                     xmintemp = tx
                 ldesc.append(f['weather'][0]['description'])
                 licon.append(f['weather'][0]['icon'])
-            else: # something went wrong...
-                print('*' * 30, 'Problem: wxdata\'s f:', f)
-                print('*' * 30, 'Problem: dt from f:', dt)
-                ldesc.append('Something went wrong')
-                licon.append('50d') # we're in the fog...
+            else: # forecast not in this day's range, skip silently
+                pass
         wicon = getmost(licon)
         wdesc = getmost(ldesc)
 
@@ -1836,12 +1847,16 @@ class Radar(QtWidgets.QLabel):
         self.lastWeatherMapsUpdate = 0
         self.weatherMapsUrl = "https://api.rainviewer.com/public/weather-maps.json"
         self.radarHost = "https://tilecache.rainviewer.com"
+        self.delay_offset = 0  # Will be set per radar instance
 
     def rtick(self):
         if time.time() > (self.lastget + self.interval):
             self.get(time.time())
             self.lastget = time.time()
         if len(self.frameImages) < 1:
+            # no rendered frames yet; retry fetch for this radar if needed
+            if time.time() > self.lastget + min(60, max(5, self.interval // 2)):
+                self.get(time.time())
             return
         if self.displayedFrame == 0:
             self.ticker += 1
@@ -1886,8 +1901,8 @@ class Radar(QtWidgets.QLabel):
     def fetchWeatherMaps(self):
         """Fetch the weather maps JSON from RainViewer API"""
         current_time = time.time()
-        # Refresh weather maps every 10 minutes
-        if self.weatherMapsData and (current_time - self.lastWeatherMapsUpdate < 600):
+        # Refresh weather maps every 20 minutes
+        if self.weatherMapsData and (current_time - self.lastWeatherMapsUpdate < 1200):
             return
         
         self.weatherMapsReq = QNetworkRequest(QUrl(self.weatherMapsUrl))
@@ -1936,56 +1951,102 @@ class Radar(QtWidgets.QLabel):
         return best_match
     
     def getTiles(self, t, i=0):
-        t = int(t / 600)*600
+        t = int(t / 600) * 600
+        now_rounded = int(time.time() / 600) * 600
+        if t > now_rounded:
+            # Do not request tiles in the future; clamp to latest available frame
+            t = now_rounded
         self.getTime = t
-        self.getIndex = i
         if i == 0:
-            # Ensure we have weather maps data
-            if not self.weatherMapsData:
+            # Periodically prune old cached tiles
+            prune_radar_tile_cache()
+            # Ensure we have recent weather maps data
+            if not self.weatherMapsData or (time.time() - self.lastWeatherMapsUpdate > 600):
                 self._pending_getTiles = (t, i)
                 self.fetchWeatherMaps()
                 return
-            
+
             self.tileurls = []
             self.tileQimages = {}  # Changed to dict to handle out-of-order replies
-            
+
             # Get the radar path for this timestamp
             radarPath = self.getRadarPathForTime(t)
             if not radarPath:
-                print("No radar data available for time " + str(t))
+                print("No radar data available for time " + str(t) + " (radar1/2/3/4)")
+                # retry shortly in case weather-maps.json is updating
+                QtCore.QTimer.singleShot(5000, lambda tt=t: self.getTiles(tt, 0))
                 return
-            
+
             for tt in self.tiletails:
                 tileurl = "%s%s/%s" % (self.radarHost, radarPath, tt.lstrip('/'))
                 self.tileurls.append(tileurl)
-        print("Tiles: " + self.myname + " " + str(self.getIndex) + " " + self.tileurls[i])
-        self.tilereq = QNetworkRequest(QUrl(self.tileurls[i]))
-        self.tilereply = manager.get(self.tilereq)
-        self.tilereply.finished.connect(self.getTilesReply)
 
-    def getTilesReply(self):
-        print("getTilesReply " + str(self.getIndex))
-        if self.tilereply.error() != QNetworkReply.NoError:
-                print("Tile load error for index " + str(self.getIndex) + ": " + self.tilereply.errorString())
+            # Start a timeout timer to combine tiles even if some fail
+            if hasattr(self, 'combineTimer') and self.combineTimer.isActive():
+                self.combineTimer.stop()
+            self.combineTimer = QtCore.QTimer()
+            self.combineTimer.setSingleShot(True)
+            self.combineTimer.timeout.connect(self.combineTiles)
+            self.combineTimer.start(10000)  # 10 seconds timeout
+
+        tileurl = self.tileurls[i]
+        # Reuse cached tile images from other radar instances when possible
+        if tileurl in radar_tile_cache:
+            cached = radar_tile_cache[tileurl]
+            if isinstance(cached.get("image"), QImage) and not cached["image"].isNull():
+                self.tileQimages[i] = cached["image"]
+                next_idx = i + 1
+                if next_idx < len(self.tileurls):
+                    self.getTiles(self.getTime, next_idx)
+                else:
+                    self.combineTiles()
                 return
-        self.tileQimages[self.getIndex] = QImage()  # Changed to dict assignment
-        self.tileQimages[self.getIndex].loadFromData(self.tilereply.readAll())
-        if self.tileQimages[self.getIndex].isNull():
-            print("Failed to load tile image for index " + str(self.getIndex))
+
+        print("Tiles: " + self.myname + " " + str(i) + " " + tileurl)
+        tilereq = QNetworkRequest(QUrl(tileurl))
+        tilereply = manager.get(tilereq)
+        tilereply.finished.connect(lambda idx=i, reply=tilereply: self.getTilesReply(idx, reply))
+
+    def getTilesReply(self, idx, reply):
+        print("getTilesReply " + str(idx))
+        if reply.error() != QNetworkReply.NoError:
+            print("Tile load error for index " + str(idx) + ": " + reply.errorString())
         else:
-            # Ensure the tile is in ARGB32 format
-            self.tileQimages[self.getIndex] = self.tileQimages[self.getIndex].convertToFormat(QImage.Format_ARGB32)
-        self.getIndex = self.getIndex + 1
-        if self.getIndex < len(self.tileurls):
-            self.getTiles(self.getTime, self.getIndex)
+            img = QImage()
+            img.loadFromData(reply.readAll())
+            if img.isNull():
+                print("Failed to load tile image for index " + str(idx))
+            else:
+                img = img.convertToFormat(QImage.Format_ARGB32)
+                self.tileQimages[idx] = img
+                # Cache it for same hash/zoom tiles on other radar renderers
+                if idx < len(self.tileurls):
+                    radar_tile_cache[self.tileurls[idx]] = {"image": img, "time": time.time()}
+
+        next_idx = idx + 1
+        if next_idx < len(self.tileurls):
+            self.getTiles(self.getTime, next_idx)
         else:
             self.combineTiles()
-            self.get()
+
+            # After frame completes, trigger load of next frame in animation window
+            nextTime = self.getTime + 600  # Move 10 min forward
+            now_rounded = int(time.time() / 600) * 600
+            if nextTime <= now_rounded:
+                frameExists = any(f["time"] == nextTime for f in self.frameImages)
+                if not frameExists:
+                    QtCore.QTimer.singleShot(600 + self.delay_offset,
+                                             lambda nextT=nextTime: self.getTiles(nextT, 0))
+            else:
+                # If nextTime would be the future, skip and keep current set
+                print("Skipping future radar frame request: {} > {}".format(nextTime, now_rounded))
 
     def combineTiles(self):
         global radar1
-        if len(self.tileQimages) < len(self.tileurls):
-            return  # Wait for all tiles to load
+        # Stop the timeout timer if it's running
+        if hasattr(self, 'combineTimer') and self.combineTimer.isActive():
+            self.combineTimer.stop()
+        # Proceed with whatever tiles we have (may be partial due to failures)
         ii = QImage(self.tilesWidth*256, self.tilesHeight*256,
                     QImage.Format_ARGB32)
         painter = QPainter()
@@ -2586,6 +2647,12 @@ radar4rect = QtCore.QRect(int(726 * xscale),
                           int(700 * xscale), 
                           int(700 * yscale))
 objradar4 = Radar(frame2, Config.radar4, radar4rect, "radar4")
+
+# Set staggered delays to prevent simultaneous API requests
+objradar1.delay_offset = 0
+objradar2.delay_offset = 600
+objradar3.delay_offset = 1200
+objradar4.delay_offset = 1800
 
 
 datex = QtWidgets.QLabel(foreGround)
