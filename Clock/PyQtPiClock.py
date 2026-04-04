@@ -689,8 +689,8 @@ def wxfinished_owm_forecast():
                 licon.append(f['weather'][0]['icon'])
             else: # forecast not in this day's range, skip silently
                 pass
-        wicon = getmost(licon)
-        wdesc = getmost(ldesc)
+        wicon = getmost(licon, '01d')
+        wdesc = getmost(ldesc, 'No data')
 
         if (xpop > 0.1):
             s += '%.0f' % xpop + '% '
@@ -712,7 +712,7 @@ def wxfinished_owm_forecast():
         wx.setStyleSheet(
             "#wx { font-size: " +
             str(int(19 * xscale * Config.fontmult)) + "px; }")
-        wx.setText(f['weather'][0]['description'].title() + "\n" + s)
+        wx.setText(wdesc.title() + "\n" + s)
 
         wicon = owmicons[wicon]
         wxiconpixmap = icon_pixmap_cache.get(wicon, QtGui.QPixmap())
@@ -729,7 +729,9 @@ def wxfinished_owm_forecast():
     
     #QtWidgets.QApplication.exit(0)
 
-def getmost(a):
+def getmost(a, default=None):
+    if not a:
+        return default
     b = dict((i, a.count(i)) for i in a)  # list to key and counts
     # print('getmost b', b)
     c = sorted(b, key=b.get)  # sort by counts

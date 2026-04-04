@@ -559,3 +559,4 @@ pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org python
 | 3.0.9      | 2025-12-22       | Current version of tiles animation seems to be artifacts-free. |
 | 3.1.0      | 2026-04-03       | Updated to new rainvewer.com tile call format. Corrected placement on radar3 map |
 | 3.1.1      | 2026-04-03       | Fixed stalled radar animations, tile fetching optimized, tiles shared between radars of the same zoom. Some logging cleanup |
+| 3.1.2      | 2026-04-04.      | Fixed crash due to getmost() assuming non-empty input |
